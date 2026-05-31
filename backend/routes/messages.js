@@ -45,9 +45,9 @@ router.get('/:partnerId', authenticate, async (req, res) => {
     const r = await pool.query(
       `SELECT m.*, u.name AS sender_name, u.avatar_url AS sender_avatar FROM messages m
        JOIN users u ON m.sender_id=u.id
-       WHERE ((m.sender_id=$1 AND m.receiver_id=$2 AND m.deleted_for_sender=FALSE)
+       WHERE ((m.sender_id=$1 AND m.receiver_id=$2 AND m.deleted_for_sender IS NOT TRUE)
            OR (m.sender_id=$2 AND m.receiver_id=$1 AND m.deleted_for_receiver IS NOT TRUE))
-         AND m.deleted_for_all=FALSE
+         AND m.deleted_for_all IS NOT TRUE
        ORDER BY m.created_at ASC LIMIT 200`,
       [req.user.id, req.params.partnerId]
     );

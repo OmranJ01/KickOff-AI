@@ -291,10 +291,13 @@ router.post('/:id/messages', authenticate, async (req, res) => {
     const preview = content.trim().length > 60 ? content.trim().slice(0, 60) + '…' : content.trim();
 
     if (membersRes.rows.length) {
-      const notifValues = membersRes.rows.map(m => `(${m.user_id},'group_message','💬 ${senderName} in ${groupName}: ${preview.replace(/'/g,"''")}',${req.params.id},'group')`).join(',');
-      pool.query(
-        `INSERT INTO notifications (user_id, type, message, related_id, related_type) VALUES ${notifValues}`
-      ).catch(() => {});
+      const notifMsg = `💬 ${senderName} in ${groupName}: ${preview}`;
+      Promise.all(membersRes.rows.map(m =>
+        pool.query(
+          `INSERT INTO notifications (user_id, type, message, related_id, related_type) VALUES ($1,'group_message',$2,$3,'group')`,
+          [m.user_id, notifMsg, req.params.id]
+        )
+      )).catch(() => {});
     }
 
     // Push message in real-time to group room members
