@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiCall, DAYS, DAYS_SHORT, SURFACES, SURFACE_COLOR, STATUS_COLOR, STATUS_BG, toMin, fromMin, hoursInRange, computeFreeWindows, validEndTimes, validStartTimes, IconBall, IconStadium, IconLogout, IconSettings, IconEye, IconUsers, IconHome, IconSearch, IconCheck, IconX, IconUserPlus, IconUserMinus, IconMapPin, IconClock, IconPlus, IconEdit, IconTrash, IconCalendar, IconPhone, IconDollar, IconUsers2, IconToggle, IconFilter, IconBell, IconChat, IconGroup, IconSend, IconArrowLeft, IconShield, IconBookmark, IconArrow, Avatar, ImagePicker, PhotoZoomModal } from "../utils";
+import socket from "../socket";
 function ChatWindow({ user, partner, onBack }) {
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState('');
@@ -8,7 +9,6 @@ function ChatWindow({ user, partner, onBack }) {
   const [zoomPhoto, setZoomPhoto] = useState(null);
   const [ctxMenu, setCtxMenu] = useState(null); // { msgId, isMe, x, y }
   const messagesEndRef = useRef(null);
-  const pollRef = useRef(null);
   const holdTimer = useRef(null);
 
   const loadMessages = useCallback(async () => {
@@ -18,9 +18,14 @@ function ChatWindow({ user, partner, onBack }) {
 
   useEffect(() => {
     loadMessages();
-    pollRef.current = setInterval(loadMessages, 3000);
-    return () => clearInterval(pollRef.current);
-  }, [loadMessages]);
+    const onNewMessage = (msg) => {
+      if (msg.sender_id === partner.partner_id) {
+        setMessages(prev => [...prev, msg]);
+      }
+    };
+    socket.on('new_message', onNewMessage);
+    return () => socket.off('new_message', onNewMessage);
+  }, [loadMessages, partner.partner_id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

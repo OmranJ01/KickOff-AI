@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require("../db");
 const { authenticate } = require("../middleware");
 const { createNotification } = require("./notifications");
+const { getIo, getOnlineUsers } = require("../socket");
 
 // Create a group/match
 router.post('/', authenticate, async (req, res) => {
@@ -142,6 +143,14 @@ router.delete('/:id/members/:userId', authenticate, async (req, res) => {
       `INSERT INTO notifications (user_id, type, message, related_id, related_type) VALUES ($1,'group_kicked',$2,$3,'group')`,
       [req.params.userId, `You were removed from "${grpRes.rows[0]?.name}" by ${adminRes.rows[0]?.name}`, req.params.id]
     ).catch(()=>{});
+
+    // Notify kicked user in real-time if online
+    const io = getIo();
+    if (io) {
+      const socketId = getOnlineUsers().get(Number(req.params.userId));
+      if (socketId) io.to(socketId).emit('kicked_from_group', { groupId: Number(req.params.id) });
+    }
+
     res.json({ success: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
@@ -271,7 +280,7 @@ router.post('/:id/messages', authenticate, async (req, res) => {
     // Notify all other active members (skip sender)
     const [groupRes, senderRes, membersRes] = await Promise.all([
       pool.query('SELECT name FROM groups WHERE id=$1', [req.params.id]),
-      pool.query('SELECT name FROM users WHERE id=$1', [req.user.id]),
+      pool.query('SELECT name, avatar_url FROM users WHERE id=$1', [req.user.id]),
       pool.query(
         `SELECT user_id FROM group_members WHERE group_id=$1 AND user_id!=$2 AND status='active'`,
         [req.params.id, req.user.id]
@@ -286,6 +295,27 @@ router.post('/:id/messages', authenticate, async (req, res) => {
       pool.query(
         `INSERT INTO notifications (user_id, type, message, related_id, related_type) VALUES ${notifValues}`
       ).catch(() => {});
+    }
+
+    // Push message in real-time to group room members
+    const io = getIo();
+    if (io) {
+      const fullMsg = {
+        ...r.rows[0],
+        hidden_for_me: false,
+        sender_name: senderName,
+        sender_avatar: senderRes.rows[0]?.avatar_url || null,
+      };
+      io.to(`group_${req.params.id}`).emit('group_message', fullMsg);
+
+      // Push notification badge to online members not in the group room
+      const groupRoom = io.sockets.adapter.rooms.get(`group_${req.params.id}`);
+      for (const member of membersRes.rows) {
+        const socketId = getOnlineUsers().get(Number(member.user_id));
+        if (socketId && !groupRoom?.has(socketId)) {
+          io.to(socketId).emit('notification', { type: 'group_message' });
+        }
+      }
     }
 
     res.status(201).json(r.rows[0]);

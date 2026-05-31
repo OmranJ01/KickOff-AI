@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require("../db");
 const { authenticate, requireOwner } = require("../middleware");
 const { toMin, splitSlot, restoreSlot } = require("../slotHelpers");
+const { emitNotification } = require("../socket");
 
 // Player: create a booking with custom time range
 // Validates: booked range must fit inside an available slot
@@ -67,6 +68,7 @@ router.post('/', authenticate, async (req, res) => {
            `📅 ${player_name} requested a booking at ${stadium_name} on ${dayName} (${String(booked_start).slice(0,5)}–${String(booked_end).slice(0,5)})`,
            booking.id]
         );
+        emitNotification(owner_id, { type: 'booking' });
       }
     } catch (notifErr) { console.error('Notification error:', notifErr); }
 
@@ -150,6 +152,7 @@ router.patch('/:id/cancel', authenticate, async (req, res) => {
            `❌ ${player_name} cancelled their booking at ${stadium_name} on ${dayName} (${timeStr})`,
            b.id]
         );
+        emitNotification(owner_id, { type: 'booking_cancelled' });
       }
     } catch (notifErr) { console.error('Cancel notif error:', notifErr); }
 
@@ -238,6 +241,7 @@ router.patch('/:id/status', authenticate, requireOwner, async (req, res) => {
            `❌ Your booking at ${stadiumName} on ${dayName} (${timeStr}) was cancelled — another booking was confirmed for that slot`,
            ob.id]
         );
+        emitNotification(ob.player_id, { type: 'booking_cancelled_by_owner' });
       }
 
       // Split the parent slot
@@ -277,6 +281,7 @@ router.patch('/:id/status', authenticate, requireOwner, async (req, res) => {
            VALUES ($1,$2,$3,$4,'booking')`,
           [b.player_id, notifType, msg, b.id]
         );
+        emitNotification(b.player_id, { type: notifType });
       }
     } catch (notifErr) { console.error('Status notif error:', notifErr); }
 

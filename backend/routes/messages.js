@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require("../db");
 const { authenticate } = require("../middleware");
 const { createNotification } = require("./notifications");
+const { getIo, getOnlineUsers } = require("../socket");
 
 // Get all conversations for current user (list of unique partners)
 router.get('/conversations', authenticate, async (req, res) => {
@@ -70,9 +71,23 @@ router.post('/', authenticate, async (req, res) => {
       [req.user.id, receiverId, content.trim()]
     );
     // Notify receiver
-    const senderRes = await client.query('SELECT name FROM users WHERE id=$1', [req.user.id]);
+    const senderRes = await client.query('SELECT name, avatar_url FROM users WHERE id=$1', [req.user.id]);
     await createNotification(client, receiverId, 'message', `${senderRes.rows[0].name} sent you a message`, req.user.id, 'user');
     await client.query('COMMIT');
+
+    // Push message in real-time to receiver if online
+    const io = getIo();
+    if (io) {
+      const socketId = getOnlineUsers().get(Number(receiverId));
+      if (socketId) {
+        io.to(socketId).emit('new_message', {
+          ...r.rows[0],
+          sender_name: senderRes.rows[0].name,
+          sender_avatar: senderRes.rows[0].avatar_url,
+        });
+      }
+    }
+
     res.status(201).json(r.rows[0]);
   } 
   catch (err) {

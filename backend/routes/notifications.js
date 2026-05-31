@@ -2,14 +2,20 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const { authenticate } = require("../middleware");
+const { getIo, getOnlineUsers } = require("../socket");
 
-// Helper: create a notification
+// Helper: create a notification and push to user if online
 async function createNotification(client, userId, type, message, relatedId = null, relatedType = null) {
-  await client.query(
+  const r = await client.query(
     `INSERT INTO notifications (user_id, type, message, related_id, related_type)
-     VALUES ($1, $2, $3, $4, $5)`,
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
     [userId, type, message, relatedId, relatedType]
   );
+  const io = getIo();
+  if (io) {
+    const socketId = getOnlineUsers().get(Number(userId));
+    if (socketId) io.to(socketId).emit('notification', r.rows[0]);
+  }
 }
 
 router.get('/', authenticate, async (req, res) => {

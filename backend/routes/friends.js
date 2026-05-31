@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 const { authenticate } = require("../middleware");
+const { emitNotification } = require("../socket");
 
 router.get('/players/search', authenticate, async (req, res) => {
 
@@ -66,7 +67,7 @@ router.post('/friends/request', authenticate, async (req, res) => {
       pool.query(
         `INSERT INTO notifications (user_id, type, message, related_id, related_type) VALUES ($1,'friend_request',$2,$3,'friendship')`,
         [addresseeId, `👥 ${name} sent you a friend request`, r.rows[0].id]
-      ).catch(()=>{});
+      ).then(() => emitNotification(addresseeId, { type: 'friend_request' })).catch(()=>{});
     }).catch(()=>{});
     
     res.status(201).json(r.rows[0]);
@@ -96,7 +97,7 @@ router.patch('/friends/:requesterId/respond', authenticate, async (req, res) => 
         pool.query(
           `INSERT INTO notifications (user_id, type, message, related_id, related_type) VALUES ($1,'friend_accepted',$2,$3,'friendship')`,
           [req.params.requesterId, `✅ ${name} accepted your friend request`, r.rows[0].id]
-        ).catch(()=>{});
+        ).then(() => emitNotification(Number(req.params.requesterId), { type: 'friend_accepted' })).catch(()=>{});
       }).catch(()=>{});
     }
 

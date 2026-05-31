@@ -343,4 +343,94 @@ Return {} only if query is completely unrelated to stadiums. Return ONLY the JSO
   }
 });
 
+// ══════════════════════════════════════════════════════════════════
+//  FEATURE 3: AI TEAM BALANCER
+//  POST /api/ai/team-balancer
+//  Body: { groupId }
+// ══════════════════════════════════════════════════════════════════
+router.post('/team-balancer', authenticate, async (req, res) => {
+  try {
+    const { groupId } = req.body;
+    if (!groupId) return res.status(400).json({ error: 'groupId is required' });
+
+    // Verify membership
+    const mem = await pool.query(
+      `SELECT id FROM group_members WHERE group_id=$1 AND user_id=$2 AND status='active'`,
+      [groupId, req.user.id]
+    );
+    if (!mem.rows.length) return res.status(403).json({ error: 'Not a member' });
+
+    // Fetch all active members with their aggregated stats
+    const membersRes = await pool.query(
+      `SELECT u.id, u.name,
+         COUNT(DISTINCT pms.match_result_id)::int        AS matches_played,
+         COALESCE(SUM(pms.goals),   0)::int              AS total_goals,
+         COALESCE(SUM(pms.assists), 0)::int              AS total_assists,
+         MODE() WITHIN GROUP (ORDER BY pms.position)     AS top_position
+       FROM group_members gm
+       JOIN users u ON u.id = gm.user_id
+       LEFT JOIN player_match_stats pms ON pms.player_id = u.id
+       WHERE gm.group_id=$1 AND gm.status='active'
+       GROUP BY u.id, u.name
+       ORDER BY u.name`,
+      [groupId]
+    );
+
+    const members = membersRes.rows;
+    if (members.length < 2) return res.status(400).json({ error: 'Need at least 2 members to balance teams' });
+
+    const playerLines = members.map(m => {
+      let line = `- ${m.name} (id:${m.id}): `;
+      if (m.matches_played > 0) {
+        line += `${m.matches_played} matches, ${m.total_goals} goals, ${m.total_assists} assists`;
+        if (m.top_position) line += `, usual position: ${m.top_position}`;
+      } else {
+        line += 'no stats recorded yet';
+        if (m.top_position) line += `, preferred position: ${m.top_position}`;
+      }
+      return line;
+    }).join('\n');
+
+    const prompt = `You are an expert football team organiser. Split these ${members.length} players into two balanced teams for the most competitive match possible.
+
+═══ PLAYERS ═══
+${playerLines}
+
+Return ONLY a raw JSON object — no markdown, no code fences, no extra text:
+{
+  "team_a": {
+    "name": "Team A",
+    "players": [{"id": <number>, "name": "<string>", "role": "<Forward|Midfielder|Defender|Goalkeeper|Winger>"}],
+    "strength_notes": "<1-2 sentences on this team's strengths>"
+  },
+  "team_b": {
+    "name": "Team B",
+    "players": [{"id": <number>, "name": "<string>", "role": "<Forward|Midfielder|Defender|Goalkeeper|Winger>"}],
+    "strength_notes": "<1-2 sentences on this team's strengths>"
+  },
+  "balance_explanation": "<2-3 sentences explaining how you balanced the teams and why the split is fair>"
+}
+
+RULES:
+- Every player appears in exactly one team, no omissions, no duplicates
+- Teams differ by at most 1 player (split ${Math.ceil(members.length / 2)} / ${Math.floor(members.length / 2)} if odd)
+- Distribute goal-scoring and assist potential evenly
+- Assign each player a realistic football role based on their stats and position history
+- Use the exact integer IDs provided above`;
+
+    const raw = await generateWithFallback(prompt);
+    const cleaned = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+
+    let result;
+    try { result = JSON.parse(cleaned); }
+    catch { return res.status(500).json({ error: 'AI returned an invalid response. Please try again.' }); }
+
+    res.json({ ...result, totalPlayers: members.length });
+  } catch (err) {
+    console.error('AI team-balancer error:', err.message);
+    if (handleAiError(err, res)) return;
+    res.status(500).json({ error: 'AI team balancing failed. Try again shortly.' });
+  }
+});
+
 module.exports = router;

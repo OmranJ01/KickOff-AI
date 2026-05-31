@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiCall, DAYS, DAYS_SHORT, SURFACES, SURFACE_COLOR, STATUS_COLOR, STATUS_BG, toMin, fromMin, hoursInRange, computeFreeWindows, validEndTimes, validStartTimes, IconBall, IconStadium, IconLogout, IconSettings, IconEye, IconUsers, IconHome, IconSearch, IconCheck, IconX, IconUserPlus, IconUserMinus, IconMapPin, IconClock, IconPlus, IconEdit, IconTrash, IconCalendar, IconPhone, IconDollar, IconUsers2, IconToggle, IconFilter, IconBell, IconChat, IconGroup, IconSend, IconArrowLeft, IconShield, IconBookmark, IconArrow, Avatar, ImagePicker, PhotoZoomModal } from "../utils";
+import socket from "../socket";
 function GroupsPage({ user, initialGroupId }) {
   const [tab, setTab] = useState('my');
   const [groups, setGroups] = useState([]);
@@ -281,8 +282,10 @@ function GroupDetail({ group, user, onBack }) {
   const [invited, setInvited] = useState(new Set()); // track successfully invited
   const [showEdit, setShowEdit] = useState(false);
   const messagesEndRef = useRef(null);
-  const pollRef = useRef(null);
   const [kicked, setKicked] = useState(false);
+  const [teamBalance, setTeamBalance] = useState(null);
+  const [balancing, setBalancing] = useState(false);
+  const [balanceError, setBalanceError] = useState('');
 
   const loadDetail = useCallback(async () => {
     try { setDetail(await apiCall(`/groups/${group.id}`)); } catch {}
@@ -299,14 +302,31 @@ function GroupDetail({ group, user, onBack }) {
   useEffect(() => {
     loadDetail();
     loadMessages();
-    pollRef.current = setInterval(loadMessages, 3000);
-    return () => clearInterval(pollRef.current);
-  }, [loadDetail, loadMessages]);
 
-  // Auto-exit when kicked — stop polling and return to groups list
+    socket.emit('join_group', { groupId: group.id });
+
+    const onGroupMessage = (msg) => {
+      if (msg.sender_id !== user.id) {
+        setMessages(prev => [...prev, msg]);
+      }
+    };
+    const onKicked = ({ groupId }) => {
+      if (groupId === group.id) setKicked(true);
+    };
+
+    socket.on('group_message', onGroupMessage);
+    socket.on('kicked_from_group', onKicked);
+
+    return () => {
+      socket.emit('leave_group', { groupId: group.id });
+      socket.off('group_message', onGroupMessage);
+      socket.off('kicked_from_group', onKicked);
+    };
+  }, [loadDetail, loadMessages, group.id, user.id]);
+
+  // Auto-exit when kicked
   useEffect(() => {
     if (kicked) {
-      clearInterval(pollRef.current);
       const t = setTimeout(() => onBack(), 3000);
       return () => clearTimeout(t);
     }
@@ -357,6 +377,18 @@ function GroupDetail({ group, user, onBack }) {
       setNewMsg('');
     } catch {}
     setSending(false);
+  };
+
+  const balanceTeams = async () => {
+    setBalancing(true);
+    setBalanceError('');
+    try {
+      const result = await apiCall('/ai/team-balancer', 'POST', { groupId: group.id });
+      setTeamBalance(result);
+    } catch (err) {
+      setBalanceError(err.message || 'Failed to balance teams. Try again.');
+    }
+    setBalancing(false);
   };
 
   const inviteFriend = async (friendId) => {
@@ -499,6 +531,64 @@ function GroupDetail({ group, user, onBack }) {
       {activeTab === 'members' && (
         <div className="tab-content">
           {zoomPhoto && <PhotoZoomModal name={zoomPhoto.name} src={zoomPhoto.src} onClose={() => setZoomPhoto(null)}/>}
+
+          {/* AI Team Balancer */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 20px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: teamBalance ? 16 : 0 }}>
+              <div>
+                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>⚡ AI Team Balancer</h3>
+                {!teamBalance && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Generate two balanced teams from group members using their match stats</p>}
+              </div>
+              <button
+                className="action-btn primary"
+                style={{ fontSize: 12, flexShrink: 0, padding: '8px 16px' }}
+                onClick={balanceTeams}
+                disabled={balancing || (detail?.members?.length || 0) < 2}
+                title={(detail?.members?.length || 0) < 2 ? 'Need at least 2 members' : ''}
+              >
+                {balancing ? <><span className="spinner sm" style={{ marginRight: 6 }} /> Balancing…</> : teamBalance ? '↻ Re-balance' : '⚡ Balance Teams'}
+              </button>
+            </div>
+            {balanceError && <div className="error-msg" style={{ marginTop: 8 }}>{balanceError}</div>}
+            {teamBalance && (
+              <>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {[teamBalance.team_a, teamBalance.team_b].map((team, ti) => {
+                    const accent = ti === 0 ? '#4ade80' : '#60a5fa';
+                    const accentBg = ti === 0 ? 'rgba(74,222,128,0.08)' : 'rgba(96,165,250,0.08)';
+                    const accentBorder = ti === 0 ? 'rgba(74,222,128,0.3)' : 'rgba(96,165,250,0.3)';
+                    return (
+                      <div key={ti} style={{ flex: '1 1 220px', background: accentBg, border: `1px solid ${accentBorder}`, borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: accent }}>{team.name}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                          {(team.players || []).map((p, pi) => (
+                            <div key={pi} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                              <Avatar name={p.name} size={26} />
+                              <span style={{ flex: 1, fontWeight: 500 }}>{p.name}</span>
+                              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 999, background: accentBg, color: accent, border: `1px solid ${accentBorder}`, whiteSpace: 'nowrap' }}>
+                                {p.role}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        {team.strength_notes && (
+                          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, fontStyle: 'italic', lineHeight: 1.55 }}>
+                            {team.strength_notes}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {teamBalance.balance_explanation && (
+                  <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(74,222,128,0.04)', border: '1px solid rgba(74,222,128,0.12)', borderRadius: 8, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                    🤖 {teamBalance.balance_explanation}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           <div className="player-list">
             {(detail?.members || []).map(m => (
               <div key={m.id} className="player-card">

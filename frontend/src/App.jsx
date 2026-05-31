@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import socket from "./socket";
 import { apiCall, DAYS, DAYS_SHORT, SURFACES, SURFACE_COLOR, STATUS_COLOR, STATUS_BG, toMin, fromMin, hoursInRange, computeFreeWindows, validEndTimes, validStartTimes, IconBall, IconStadium, IconLogout, IconSettings, IconEye, IconUsers, IconHome, IconSearch, IconCheck, IconX, IconUserPlus, IconUserMinus, IconMapPin, IconClock, IconPlus, IconEdit, IconTrash, IconCalendar, IconPhone, IconDollar, IconUsers2, IconToggle, IconFilter, IconBell, IconChat, IconGroup, IconSend, IconArrowLeft, IconShield, IconBookmark, IconArrow, Avatar, ImagePicker, PhotoZoomModal } from "./utils";
 import AuthPage from "./pages/AuthPage";
 import { OwnerStadiumsPage, BrowseStadiumsPage } from "./pages/StadiumsPage";
@@ -21,7 +22,6 @@ function HomePage({ user, onAvatarChange, onLogout }) {
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
   const notifRef = useRef(null);
-  // Pass user update down to SettingsPage
 
   const handleAvatarChange = (update) => onAvatarChange(update);
 
@@ -30,14 +30,11 @@ function HomePage({ user, onAvatarChange, onLogout }) {
     setPage("chat");
   };
 
-  // Poll unread count
+  // Fetch initial unread count, then update via socket
   useEffect(() => {
-    const fetchCount = async () => {
-      try { const d = await apiCall('/notifications/unread-count'); setUnreadNotifs(d.count); } catch {}
-    };
-    fetchCount();
-    const interval = setInterval(fetchCount, 15000);
-    return () => clearInterval(interval);
+    apiCall('/notifications/unread-count').then(d => setUnreadNotifs(d.count)).catch(() => {});
+    socket.on('notification', () => setUnreadNotifs(n => n + 1));
+    return () => socket.off('notification');
   }, []);
 
 
@@ -211,6 +208,17 @@ export default function App() {
     else setChecking(false);
   },[]);
 
+  // Connect socket when logged in, disconnect on logout
+  useEffect(() => {
+    if (user) {
+      socket.auth = { token: localStorage.getItem('token') };
+      socket.connect();
+    } else {
+      socket.disconnect();
+    }
+    return () => {};
+  }, [user]);
+
   if(checking) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#0a0f0a"}}><div className="spinner large"/></div>;
-  return user?<HomePage user={user} onAvatarChange={u=>setUser(prev=>({...prev,...u}))} onLogout={()=>{localStorage.removeItem("token");setUser(null);}}/>:<AuthPage onLogin={setUser}/>;
+  return user?<HomePage user={user} onAvatarChange={u=>setUser(prev=>({...prev,...u}))} onLogout={()=>{localStorage.removeItem("token");socket.disconnect();setUser(null);}}/>:<AuthPage onLogin={setUser}/>;
 }
