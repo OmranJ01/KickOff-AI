@@ -1562,3 +1562,260 @@ body {
   border: 1px dashed rgba(255,255,255,0.12) !important;
   box-shadow: none !important;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   PRO MOTION — polished animations
+══════════════════════════════════════════════════════════════════ */
+
+/* ── Modal spring entrance ──────────────────────────────────────── */
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(28px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+.modal { animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* ── Auth card entrance ─────────────────────────────────────────── */
+.auth-card { animation: modalIn 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* ── Page section fade-up ───────────────────────────────────────── */
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+.players-page, .bookings-page, .groups-page,
+.stadiums-page, .friends-page, .settings-root {
+  animation: pageIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* ── Card staggered entrance ────────────────────────────────────── */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+.player-card                { animation: cardIn 0.32s cubic-bezier(0.4, 0, 0.2, 1) both; }
+.booking-card               { animation: cardIn 0.32s cubic-bezier(0.4, 0, 0.2, 1) both; }
+.group-grid .group-card     { animation: cardIn 0.32s cubic-bezier(0.4, 0, 0.2, 1) both; }
+.stadium-grid .stadium-card { animation: cardIn 0.32s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+/* Stagger delays — first 7 items, rest share the last delay */
+.player-card:nth-child(1), .booking-card:nth-child(1),
+.group-grid .group-card:nth-child(1), .stadium-grid .stadium-card:nth-child(1) { animation-delay: 0.04s; }
+
+.player-card:nth-child(2), .booking-card:nth-child(2),
+.group-grid .group-card:nth-child(2), .stadium-grid .stadium-card:nth-child(2) { animation-delay: 0.09s; }
+
+.player-card:nth-child(3), .booking-card:nth-child(3),
+.group-grid .group-card:nth-child(3), .stadium-grid .stadium-card:nth-child(3) { animation-delay: 0.13s; }
+
+.player-card:nth-child(4), .booking-card:nth-child(4),
+.group-grid .group-card:nth-child(4), .stadium-grid .stadium-card:nth-child(4) { animation-delay: 0.17s; }
+
+.player-card:nth-child(5), .booking-card:nth-child(5),
+.group-grid .group-card:nth-child(5), .stadium-grid .stadium-card:nth-child(5) { animation-delay: 0.20s; }
+
+.player-card:nth-child(6), .booking-card:nth-child(6),
+.group-grid .group-card:nth-child(6), .stadium-grid .stadium-card:nth-child(6) { animation-delay: 0.23s; }
+
+.player-card:nth-child(n+7), .booking-card:nth-child(n+7),
+.group-grid .group-card:nth-child(n+7), .stadium-grid .stadium-card:nth-child(n+7) { animation-delay: 0.26s; }
+
+/* ── Player & booking card hover lift ───────────────────────────── */
+.player-card {
+  transition: border-color 0.22s, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s;
+}
+.player-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 36px rgba(0,0,0,0.38), 0 0 0 1px rgba(74,222,128,0.1);
+}
+
+.booking-card {
+  transition: border-color 0.22s, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s;
+}
+.booking-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 36px rgba(0,0,0,0.38);
+}
+
+/* ── Player card avatar scale on hover ──────────────────────────── */
+.player-card .avatar { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+.player-card:hover .avatar { transform: scale(1.1); }
+
+/* ── Group card icon glow on hover ──────────────────────────────── */
+.group-card:hover .group-avatar {
+  background: rgba(74,222,128,0.18);
+  border-color: rgba(74,222,128,0.45);
+  transition: background 0.22s, border-color 0.22s;
+}
+
+/* ── Button active press feedback ───────────────────────────────── */
+.submit-btn:active, .action-btn:active,
+.cta-btn:active, .book-btn:active,
+.dash-action-card:active {
+  transform: scale(0.97) translateY(1px) !important;
+  transition-duration: 0.07s !important;
+}
+
+/* ── Notification panel slide-down ──────────────────────────────── */
+@keyframes notifPanelIn {
+  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)     scale(1);    }
+}
+.notif-panel { animation: notifPanelIn 0.2s cubic-bezier(0.4, 0, 0.2, 1) both; }
+
+/* ── Notification badge pop (re-triggers on React re-render) ─────── */
+@keyframes badgePop {
+  0%   { transform: scale(1);    }
+  35%  { transform: scale(1.35); }
+  65%  { transform: scale(0.88); }
+  100% { transform: scale(1);    }
+}
+.notif-badge { animation: badgePop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* ── Settings active nav item indent ────────────────────────────── */
+.settings-nav-item { transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1); }
+.settings-nav-item.active { transform: translateX(4px); }
+
+/* ── Focus ring on form inputs ───────────────────────────────────── */
+.field input:focus, .field select:focus, .field textarea:focus {
+  box-shadow: 0 0 0 3px rgba(74,222,128,0.09);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MONTHLY BOOKING CALENDAR
+══════════════════════════════════════════════════════════════════ */
+.booking-modal { max-width: 520px; }
+
+.book-calendar {
+  background: rgba(6,14,8,0.7);
+  border: 1px solid rgba(74,222,128,0.15);
+  border-radius: 14px;
+  padding: 16px;
+  user-select: none;
+  margin-bottom: 14px;
+}
+.book-cal-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.cal-nav-btn {
+  background: rgba(74,222,128,0.08);
+  border: 1px solid rgba(74,222,128,0.2);
+  border-radius: 8px;
+  color: var(--text);
+  width: 32px; height: 32px;
+  font-size: 20px; line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.cal-nav-btn:hover:not(:disabled) { background: rgba(74,222,128,0.15); border-color: rgba(74,222,128,0.4); }
+.cal-nav-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+.cal-month-label {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px; font-weight: 700; color: var(--text);
+}
+/* Legend */
+.cal-legend {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.cal-legend-item {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-muted);
+}
+.cal-dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0;
+}
+.cal-dot.available { background: #4ade80; }
+.cal-dot.partial   { background: #facc15; }
+.cal-dot.full      { background: #f87171; }
+.cal-dot.closed    { background: #374151; }
+/* Weekday headers */
+.cal-weekdays {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 2px; margin-bottom: 4px;
+}
+.cal-weekday {
+  text-align: center;
+  font-size: 10.5px; font-weight: 700;
+  color: var(--text-muted); letter-spacing: 0.04em;
+  padding: 3px 0;
+}
+/* Day grid */
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.cal-cell {
+  aspect-ratio: 1;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  font-size: 12.5px; font-weight: 500;
+  cursor: default; position: relative;
+  transition: background 0.12s, transform 0.12s, box-shadow 0.12s, border-color 0.12s;
+  border: 1px solid transparent;
+  min-height: 34px;
+}
+.cal-cell.empty  { background: transparent; }
+.cal-cell.cal-past    { color: #374151; }
+.cal-cell.cal-closed  { color: #4b5563; background: rgba(55,65,81,0.18); }
+.cal-cell.cal-available {
+  background: rgba(74,222,128,0.10);
+  border-color: rgba(74,222,128,0.22);
+  color: #4ade80;
+}
+.cal-cell.cal-partial {
+  background: rgba(250,204,21,0.09);
+  border-color: rgba(250,204,21,0.22);
+  color: #facc15;
+}
+.cal-cell.cal-full {
+  background: rgba(248,113,113,0.08);
+  border-color: rgba(248,113,113,0.18);
+  color: #f87171;
+}
+.cal-cell.clickable { cursor: pointer; }
+.cal-cell.clickable:hover {
+  transform: scale(1.1); z-index: 1;
+  box-shadow: 0 2px 14px rgba(0,0,0,0.35);
+}
+.cal-cell.selected {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #061008 !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 0 2px rgba(74,222,128,0.35);
+  transform: scale(1.08);
+}
+.cal-cell.today::after {
+  content: '';
+  position: absolute; bottom: 3px; left: 50%;
+  transform: translateX(-50%);
+  width: 4px; height: 4px; border-radius: 50%;
+  background: currentColor; opacity: 0.85;
+}
+.cal-loading {
+  font-size: 12px; color: var(--text-muted);
+  text-align: center; padding: 18px 0;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+/* Selected date + time row */
+.cal-selected-section {
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  margin-top: 2px;
+}
+.cal-selected-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.cal-selected-date {
+  font-size: 14px; font-weight: 600; color: var(--text);
+}
+.cal-clear-date {
+  font-size: 12px; color: var(--primary);
+  background: none; border: none; cursor: pointer;
+  text-decoration: underline; padding: 0;
+}

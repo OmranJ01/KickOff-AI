@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiCall, DAYS, DAYS_SHORT, SURFACES, SURFACE_COLOR, STATUS_COLOR, STATUS_BG, toMin, fromMin, hoursInRange, computeFreeWindows, validEndTimes, validStartTimes, IconBall, IconStadium, IconLogout, IconSettings, IconEye, IconUsers, IconHome, IconSearch, IconCheck, IconX, IconUserPlus, IconUserMinus, IconMapPin, IconClock, IconPlus, IconEdit, IconTrash, IconCalendar, IconPhone, IconDollar, IconUsers2, IconToggle, IconFilter, IconBell, IconChat, IconGroup, IconSend, IconArrowLeft, IconShield, IconBookmark, IconArrow, Avatar, ImagePicker, PhotoZoomModal } from "../utils";
+
+// ── Schedule Builder ──────────────────────────────────────────────
 function ScheduleBuilder({ stadiumId, onClose }) {
   const [slots, setSlots] = useState({0:[],1:[],2:[],3:[],4:[],5:[],6:[]});
   const [activeDay, setActiveDay] = useState(1);
@@ -8,26 +10,20 @@ function ScheduleBuilder({ stadiumId, onClose }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [hasDefault, setHasDefault] = useState(false);
-  const [savingDefault, setSavingDefault] = useState(false);
-  const [resettingDay, setResettingDay] = useState(null);
 
   const TIME_OPTIONS = [];
   for (let h = 6; h <= 24; h++) TIME_OPTIONS.push(`${String(h).padStart(2,"0")}:00`);
 
   useEffect(() => {
-    Promise.all([
-      apiCall(`/stadiums/${stadiumId}/schedule`),
-      apiCall(`/stadiums/${stadiumId}/default-schedule`)
-    ]).then(([data, def]) => {
-      const s = {0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
-      data.forEach(row => {
-        const d = row.day_of_week;
-        s[d] = [...(s[d]||[]), { slot_start:row.slot_start.slice(0,5), slot_end:row.slot_end.slice(0,5) }];
-      });
-      setSlots(s);
-      setHasDefault(def.length > 0);
-    }).catch(()=>{}).finally(()=>setLoading(false));
+    apiCall(`/stadiums/${stadiumId}/schedule`)
+      .then(data => {
+        const s = {0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
+        data.forEach(row => {
+          const d = row.day_of_week;
+          s[d] = [...(s[d]||[]), { slot_start:row.slot_start.slice(0,5), slot_end:row.slot_end.slice(0,5) }];
+        });
+        setSlots(s);
+      }).catch(()=>{}).finally(()=>setLoading(false));
   }, [stadiumId]);
 
   const addSlot = () => {
@@ -58,46 +54,6 @@ function ScheduleBuilder({ stadiumId, onClose }) {
       onClose(true);
     } catch(err){ setError(err.message); }
     finally{ setSaving(false); }
-  };
-
-  const saveAsDefault = async () => {
-    setSavingDefault(true); setError("");
-    try {
-      const allSlots = [];
-      for(let d=0;d<7;d++) (slots[d]||[]).forEach(s=>allSlots.push({day_of_week:d,slot_start:s.slot_start,slot_end:s.slot_end}));
-      await apiCall(`/stadiums/${stadiumId}/default-schedule`,"PUT",{slots:allSlots});
-      setHasDefault(true);
-      alert("✅ Current schedule saved as default template!");
-    } catch(err){ setError(err.message); }
-    finally{ setSavingDefault(false); }
-  };
-
-  const resetDay = async (day) => {
-    if (!hasDefault) { alert("No default template saved yet. First set up a schedule, then click 'Save as Default'."); return; }
-    if (!window.confirm(`Reset ${DAYS[day]} to the default template? This will remove all current slots for ${DAYS[day]} and restore the saved default.`)) return;
-    setResettingDay(day);
-    try {
-      await apiCall(`/stadiums/${stadiumId}/reset-schedule`, "POST", { day: Number(day) });
-      const data = await apiCall(`/stadiums/${stadiumId}/schedule`);
-      const s = {0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
-      data.forEach(row => { const d=row.day_of_week; s[d]=[...(s[d]||[]),{slot_start:row.slot_start.slice(0,5),slot_end:row.slot_end.slice(0,5)}]; });
-      setSlots(s);
-    } catch(err){ setError(err.message); }
-    finally{ setResettingDay(null); }
-  };
-
-  const resetAllDays = async () => {
-    if (!hasDefault) { alert("No default template saved yet."); return; }
-    if (!window.confirm("Reset ALL days to the default template? All current slots will be replaced.")) return;
-    setResettingDay('all');
-    try {
-      await apiCall(`/stadiums/${stadiumId}/reset-schedule`,"POST",{});
-      const data = await apiCall(`/stadiums/${stadiumId}/schedule`);
-      const s = {0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
-      data.forEach(row => { const d=row.day_of_week; s[d]=[...(s[d]||[]),{slot_start:row.slot_start.slice(0,5),slot_end:row.slot_end.slice(0,5)}]; });
-      setSlots(s);
-    } catch(err){ setError(err.message); }
-    finally{ setResettingDay(null); }
   };
 
   const totalSlots = Object.values(slots).reduce((a,v)=>a+v.length,0);
@@ -144,28 +100,9 @@ function ScheduleBuilder({ stadiumId, onClose }) {
             <button className="copy-all-btn" onClick={copyToAll}>Copy {DAYS[activeDay]}'s slots to all days</button>
           </div>
         </div>
-        <div className="modal-footer" style={{flexDirection:'column',gap:8}}>
-          <div style={{display:'flex',gap:8,width:'100%'}}>
-            <button className="btn-secondary" onClick={()=>onClose(false)}>Cancel</button>
-            <button className="submit-btn" style={{flex:1}} onClick={save} disabled={saving}>{saving?<span className="spinner"/>:"Save Schedule"}</button>
-          </div>
-          <div style={{display:'flex',gap:8,width:'100%'}}>
-            <button
-              onClick={saveAsDefault} disabled={savingDefault}
-              style={{flex:1,padding:'9px 14px',background:'rgba(250,204,21,0.08)',border:'1px solid rgba(250,204,21,0.3)',color:'#facc15',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}
-              title="Save current schedule as reusable default template"
-            >
-              {savingDefault?<span className="spinner sm"/>:'⭐'} Save as Default Template
-            </button>
-            <button
-              onClick={resetAllDays} disabled={!hasDefault || resettingDay==='all'}
-              style={{flex:1,padding:'9px 14px',background:'rgba(250,204,21,0.05)',border:'1px solid rgba(250,204,21,0.2)',color:hasDefault?'#facc15':'var(--text-muted)',borderRadius:10,cursor:hasDefault?'pointer':'not-allowed',fontSize:13,fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:6,opacity:hasDefault?1:0.45}}
-              title={hasDefault?"Reset all days to default template":"No default saved yet"}
-            >
-              {resettingDay==='all'?<span className="spinner sm"/>:'↺'} Reset All to Default
-            </button>
-          </div>
-          {hasDefault && <div style={{fontSize:11,color:'var(--text-muted)',textAlign:'center'}}>⭐ Default template saved — use Reset buttons to restore any day</div>}
+        <div className="modal-footer">
+          <button className="btn-secondary" onClick={()=>onClose(false)}>Cancel</button>
+          <button className="submit-btn" style={{flex:1}} onClick={save} disabled={saving}>{saving?<span className="spinner"/>:"Save Schedule"}</button>
         </div>
       </div>
     </div>
@@ -251,69 +188,103 @@ function StadiumModal({ stadium, onClose, onSave }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  PLAYER: BOOK SLOT MODAL — custom time range picker
+//  PLAYER: BOOK SLOT MODAL — full monthly calendar + time range picker
 // ══════════════════════════════════════════════════════════════════
+const MONTHS_LONG = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const CAL_WDAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const STATUS_CLS  = { available:'cal-available', partial:'cal-partial', full:'cal-full', closed:'cal-closed', past:'cal-past' };
+
 function BookSlotModal({ stadium, onClose, onBooked }) {
-  const [selectedDay, setSelectedDay] = useState(new Date().getDay());
-  const [slotsData, setSlotsData] = useState({ slots:[], bookings:[], pending:[] });
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [bookedStart, setBookedStart] = useState("");
-  const [bookedEnd, setBookedEnd] = useState("");
-  const [note, setNote] = useState("");
-  const [booking, setBooking] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
 
-  const loadSlots = useCallback(async (day) => {
-    setLoadingSlots(true); setBookedStart(""); setBookedEnd(""); setError("");
-    try { setSlotsData(await apiCall(`/stadiums/${stadium.id}/slots?day=${day}`)); }
-    catch { setSlotsData({ slots:[], bookings:[], pending:[] }); }
-    setLoadingSlots(false);
-  }, [stadium.id]);
+  const [viewYear,    setViewYear]    = useState(today.getFullYear());
+  const [viewMonth,   setViewMonth]   = useState(today.getMonth() + 1); // 1-12
+  const [dayStatus,   setDayStatus]   = useState([]);
+  const [loadingMonth,setLoadingMonth]= useState(true);
+  const [selectedDate,setSelectedDate]= useState('');
+  const [slotsData,   setSlotsData]   = useState({ slots:[], bookings:[], pending:[] });
+  const [loadingSlots,setLoadingSlots]= useState(false);
+  const [bookedStart, setBookedStart] = useState('');
+  const [bookedEnd,   setBookedEnd]   = useState('');
+  const [note,        setNote]        = useState('');
+  const [booking,     setBooking]     = useState(false);
+  const [error,       setError]       = useState('');
+  const [success,     setSuccess]     = useState(false);
 
-  useEffect(() => { loadSlots(selectedDay); }, [selectedDay, loadSlots]);
+  // Load month availability whenever month/year changes
+  useEffect(() => {
+    setLoadingMonth(true);
+    setSelectedDate(''); setBookedStart(''); setBookedEnd('');
+    apiCall(`/stadiums/${stadium.id}/month-availability?year=${viewYear}&month=${viewMonth}`)
+      .then(d => setDayStatus(d))
+      .catch(() => setDayStatus([]))
+      .finally(() => setLoadingMonth(false));
+  }, [stadium.id, viewYear, viewMonth]);
 
-  // Free windows only subtract CONFIRMED bookings — pending don't block
-  const freeWindows = computeFreeWindows(slotsData.slots, slotsData.bookings);
+  // Load slot details when a day is clicked
+  useEffect(() => {
+    if (!selectedDate) return;
+    setLoadingSlots(true); setBookedStart(''); setBookedEnd(''); setError('');
+    apiCall(`/stadiums/${stadium.id}/date-slots?date=${selectedDate}`)
+      .then(d => setSlotsData(d))
+      .catch(() => setSlotsData({ slots:[], bookings:[], pending:[] }))
+      .finally(() => setLoadingSlots(false));
+  }, [selectedDate, stadium.id]);
+
+  const freeWindows  = computeFreeWindows(slotsData.slots, slotsData.bookings);
   const startOptions = validStartTimes(freeWindows);
-  const endOptions = bookedStart ? validEndTimes(toMin(bookedStart), freeWindows) : [];
-
-  // Count how many pending requests touch each free window (info only)
+  const endOptions   = bookedStart ? validEndTimes(toMin(bookedStart), freeWindows) : [];
   const pendingCount = (slotsData.pending || []).length;
+  const duration     = bookedStart && bookedEnd ? (toMin(bookedEnd) - toMin(bookedStart)) / 60 : 0;
+  const price        = duration * Number(stadium.price_per_hour);
 
-  // When start changes, reset end if it's no longer valid
-  const handleStartChange = (val) => {
-    setBookedStart(val);
-    setBookedEnd("");
-    setError("");
+  const firstDay    = new Date(viewYear, viewMonth - 1, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+  const curMonthStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  const viewMonthStr= `${viewYear}-${String(viewMonth).padStart(2,'0')}`;
+  const canGoPrev   = viewMonthStr > curMonthStr;
+  const pad = n => String(n).padStart(2, '0');
+
+  const statusMap = {};
+  for (const d of dayStatus) statusMap[d.date] = d.status;
+
+  const prevMonth = () => {
+    if (viewMonth === 1) { setViewYear(y => y - 1); setViewMonth(12); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 12) { setViewYear(y => y + 1); setViewMonth(1); }
+    else setViewMonth(m => m + 1);
   };
 
-  const duration = bookedStart && bookedEnd ? (toMin(bookedEnd) - toMin(bookedStart)) / 60 : 0;
-  const price = duration * Number(stadium.price_per_hour);
-
   const handleBook = async () => {
-    if (!bookedStart || !bookedEnd) return;
-    setBooking(true); setError("");
+    if (!selectedDate || !bookedStart || !bookedEnd) return;
+    setBooking(true); setError('');
     try {
-      await apiCall("/bookings","POST",{
-        stadium_id:stadium.id, day_of_week:selectedDay,
-        booked_start:bookedStart, booked_end:bookedEnd, note:note||null
+      await apiCall('/bookings', 'POST', {
+        stadium_id: stadium.id,
+        booking_date: selectedDate,
+        booked_start: bookedStart,
+        booked_end: bookedEnd,
+        note: note || null,
       });
       setSuccess(true);
       setTimeout(() => onBooked(), 1800);
-    } catch(err) { setError(err.message); }
+    } catch (err) { setError(err.message); }
     finally { setBooking(false); }
   };
 
-  const color = SURFACE_COLOR[stadium.surface]||"#4ade80";
+  const fmtSelected = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const color = SURFACE_COLOR[stadium.surface] || '#4ade80';
 
   return (
     <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal">
+      <div className="modal booking-modal">
         <div className="modal-header">
           <div>
             <h2 className="modal-title">Book a Slot</h2>
-            <p style={{fontSize:13,color:"var(--text-muted)",marginTop:2}}>
+            <p style={{fontSize:13,color:'var(--text-muted)',marginTop:2}}>
               {stadium.name} · <span style={{color}}>₪{Number(stadium.price_per_hour).toLocaleString()}/hr</span>
             </p>
           </div>
@@ -324,104 +295,118 @@ function BookSlotModal({ stadium, onClose, onBooked }) {
           <div className="booking-success">
             <div className="success-icon">✓</div>
             <p>Booking request sent!</p>
-            <p style={{fontSize:13,color:"var(--text-muted)"}}>Waiting for owner confirmation</p>
+            <p style={{fontSize:13,color:'var(--text-muted)'}}>Waiting for owner confirmation</p>
           </div>
         ) : (
           <div className="modal-form">
-            {/* Day selector */}
-            <div>
-              <label className="field-label">Select Day</label>
-              <div className="day-tabs" style={{marginTop:8}}>
-                {DAYS_SHORT.map((d,i)=>(
-                  <button key={i} className={`day-tab ${selectedDay===i?"active":""}`} onClick={()=>setSelectedDay(i)}>{d}</button>
-                ))}
+
+            {/* Monthly calendar */}
+            <div className="book-calendar">
+              <div className="book-cal-nav">
+                <button className="cal-nav-btn" onClick={prevMonth} disabled={!canGoPrev}>‹</button>
+                <span className="cal-month-label">{MONTHS_LONG[viewMonth-1]} {viewYear}</span>
+                <button className="cal-nav-btn" onClick={nextMonth}>›</button>
               </div>
+
+              <div className="cal-legend">
+                <span className="cal-legend-item"><span className="cal-dot available"/>Available</span>
+                <span className="cal-legend-item"><span className="cal-dot partial"/>Partial</span>
+                <span className="cal-legend-item"><span className="cal-dot full"/>Full</span>
+                <span className="cal-legend-item"><span className="cal-dot closed"/>Closed</span>
+              </div>
+
+              <div className="cal-weekdays">
+                {CAL_WDAYS.map(d=><span key={d} className="cal-weekday">{d}</span>)}
+              </div>
+
+              {loadingMonth ? (
+                <div className="cal-loading"><span className="spinner sm" style={{marginRight:6}}/>Loading calendar…</div>
+              ) : (
+                <div className="cal-grid">
+                  {Array(firstDay).fill(null).map((_,i)=><div key={`e${i}`} className="cal-cell empty"/>)}
+                  {Array(daysInMonth).fill(null).map((_,i)=>{
+                    const day = i + 1;
+                    const dateStr = `${viewYear}-${pad(viewMonth)}-${pad(day)}`;
+                    const status = statusMap[dateStr] || 'closed';
+                    const clickable = status === 'available' || status === 'partial';
+                    const isSel = selectedDate === dateStr;
+                    const isToday = dateStr === todayStr;
+                    return (
+                      <div
+                        key={dateStr}
+                        className={`cal-cell ${STATUS_CLS[status]||''} ${isSel?'selected':''} ${isToday?'today':''} ${clickable?'clickable':''}`}
+                        onClick={()=>clickable&&setSelectedDate(dateStr)}
+                        title={status.charAt(0).toUpperCase()+status.slice(1)}
+                      >
+                        {day}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {/* Available windows visualizer */}
-            {!loadingSlots && (
-              <div>
-                <label className="field-label">Available Windows — {DAYS[selectedDay]}</label>
-                {freeWindows.length === 0 ? (
-                  <div className="slot-empty" style={{padding:"16px 0",textAlign:"left"}}>No availability for {DAYS[selectedDay]}</div>
-                ) : (
-                  <div className="free-windows">
-                    {freeWindows.map((w,i) => (
-                      <div key={i} className="free-window-chip">
-                        <IconClock/>
-                        <span>{fromMin(w.start)}</span>
-                        <IconArrow/>
-                        <span>{fromMin(w.end)}</span>
-                        <span className="free-window-dur">{(w.end-w.start)/60}h free</span>
-                      </div>
-                    ))}
-                    {pendingCount > 0 && (
-                      <div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'#facc15',marginTop:4,padding:'5px 10px',background:'rgba(250,204,21,0.07)',border:'1px solid rgba(250,204,21,0.18)',borderRadius:8}}>
-                        <span>⏳</span>
-                        <span>{pendingCount} pending request{pendingCount>1?'s':''} awaiting owner approval — slot still bookable</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {loadingSlots && <div className="center-spinner" style={{padding:20}}><span className="spinner large"/></div>}
-
-            {/* Time range picker */}
-            {!loadingSlots && freeWindows.length > 0 && (
-              <div>
-                <label className="field-label">Choose Your Time Range</label>
-                <div className="time-range-picker">
-                  <div className="time-range-field">
-                    <span className="time-range-label">From</span>
-                    <select
-                      value={bookedStart}
-                      onChange={e=>handleStartChange(e.target.value)}
-                      className="time-select"
-                    >
-                      <option value="">-- Start --</option>
-                      {startOptions.map(t=><option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div className="time-range-arrow"><IconArrow/></div>
-                  <div className="time-range-field">
-                    <span className="time-range-label">To</span>
-                    <select
-                      value={bookedEnd}
-                      onChange={e=>{setBookedEnd(e.target.value);setError("");}}
-                      className="time-select"
-                      disabled={!bookedStart}
-                    >
-                      <option value="">-- End --</option>
-                      {endOptions.map(t=><option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
+            {/* Time picker — shown below calendar when date selected */}
+            {selectedDate && (
+              <div className="cal-selected-section">
+                <div className="cal-selected-header">
+                  <span className="cal-selected-date">{fmtSelected(selectedDate)}</span>
+                  <button className="cal-clear-date" onClick={()=>{setSelectedDate('');setBookedStart('');setBookedEnd('');}}>Change date</button>
                 </div>
 
-                {/* Price preview */}
-                {duration > 0 && (
-                  <div className="price-preview">
-                    <div className="price-preview-row">
-                      <span>{duration} hour{duration>1?"s":""} × ₪{Number(stadium.price_per_hour).toLocaleString()}</span>
-                      <span className="price-total">₪{price.toLocaleString()}</span>
+                {loadingSlots && <div className="center-spinner" style={{padding:16}}><span className="spinner large"/></div>}
+
+                {!loadingSlots && freeWindows.length === 0 && (
+                  <div className="slot-empty" style={{padding:'10px 0',fontSize:13}}>No free windows on this date — try another day</div>
+                )}
+
+                {!loadingSlots && freeWindows.length > 0 && (
+                  <>
+                    <div className="free-windows">
+                      {freeWindows.map((w,i)=>(
+                        <div key={i} className="free-window-chip">
+                          <IconClock/><span>{fromMin(w.start)}</span><IconArrow/><span>{fromMin(w.end)}</span>
+                          <span className="free-window-dur">{(w.end-w.start)/60}h free</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className="price-preview-note">
-                      If confirmed, the owner's schedule will be updated:
-                      {toMin(bookedStart) > toMin(slotsData.slots.find(s=>toMin(s.slot_start)<=toMin(bookedStart)&&toMin(s.slot_end)>=toMin(bookedEnd))?.slot_start||bookedStart) && (
-                        <span className="split-preview"> {slotsData.slots.find(s=>toMin(s.slot_start)<=toMin(bookedStart)&&toMin(s.slot_end)>=toMin(bookedEnd))?.slot_start?.slice(0,5)}→{bookedStart}</span>
-                      )}
-                      <span className="split-preview booked"> {bookedStart}→{bookedEnd} (yours)</span>
-                      {toMin(bookedEnd) < toMin(slotsData.slots.find(s=>toMin(s.slot_start)<=toMin(bookedStart)&&toMin(s.slot_end)>=toMin(bookedEnd))?.slot_end||bookedEnd) && (
-                        <span className="split-preview"> {bookedEnd}→{slotsData.slots.find(s=>toMin(s.slot_start)<=toMin(bookedStart)&&toMin(s.slot_end)>=toMin(bookedEnd))?.slot_end?.slice(0,5)}</span>
-                      )}
+                    {pendingCount > 0 && (
+                      <div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'#facc15',margin:'6px 0',padding:'5px 10px',background:'rgba(250,204,21,0.07)',border:'1px solid rgba(250,204,21,0.18)',borderRadius:8}}>
+                        <span>⏳</span><span>{pendingCount} pending request{pendingCount>1?'s':''} — still bookable</span>
+                      </div>
+                    )}
+
+                    <div className="time-range-picker" style={{marginTop:12}}>
+                      <div className="time-range-field">
+                        <span className="time-range-label">From</span>
+                        <select value={bookedStart} onChange={e=>{setBookedStart(e.target.value);setBookedEnd('');setError('');}} className="time-select">
+                          <option value="">-- Start --</option>
+                          {startOptions.map(t=><option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div className="time-range-arrow"><IconArrow/></div>
+                      <div className="time-range-field">
+                        <span className="time-range-label">To</span>
+                        <select value={bookedEnd} onChange={e=>{setBookedEnd(e.target.value);setError('');}} className="time-select" disabled={!bookedStart}>
+                          <option value="">-- End --</option>
+                          {endOptions.map(t=><option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
                     </div>
-                  </div>
+
+                    {duration > 0 && (
+                      <div className="price-preview">
+                        <div className="price-preview-row">
+                          <span>{duration}h × ₪{Number(stadium.price_per_hour).toLocaleString()}</span>
+                          <span className="price-total">₪{price.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
 
-            {/* Note */}
             {bookedStart && bookedEnd && (
               <div className="field">
                 <label>Note <span className="optional">(optional)</span></label>
@@ -433,8 +418,11 @@ function BookSlotModal({ stadium, onClose, onBooked }) {
 
             <div className="modal-actions">
               <button className="btn-secondary" onClick={onClose}>Cancel</button>
-              <button className="submit-btn" style={{flex:1}} onClick={handleBook} disabled={!bookedStart||!bookedEnd||booking}>
-                {booking ? <span className="spinner"/> : bookedStart && bookedEnd ? `Book ${bookedStart} – ${bookedEnd}` : "Select a time range"}
+              <button className="submit-btn" style={{flex:1}} onClick={handleBook} disabled={!selectedDate||!bookedStart||!bookedEnd||booking}>
+                {booking ? <span className="spinner"/> :
+                  (selectedDate && bookedStart && bookedEnd)
+                    ? `Book ${bookedStart}–${bookedEnd} · ${new Date(selectedDate+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})}`
+                    : 'Select a date and time'}
               </button>
             </div>
           </div>
@@ -450,7 +438,7 @@ function BookSlotModal({ stadium, onClose, onBooked }) {
 function BookingsPanel({ stadiumId, stadiumName }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterDay, setFilterDay] = useState("all");
+  const [filterDate, setFilterDate] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [actionLoading, setActionLoading] = useState(null);
 
@@ -477,17 +465,25 @@ function BookingsPanel({ stadiumId, stadiumName }) {
   };
 
   const filtered = bookings.filter(b=>
-    (filterDay==="all"||b.day_of_week===parseInt(filterDay)) &&
+    (!filterDate || (b.booking_date && b.booking_date.slice(0,10) === filterDate)) &&
     (filterStatus==="all"||b.status===filterStatus)
   );
 
-  // Find which pending bookings overlap each other — map id → list of conflicting player names+times
+  const fmtBookingDate = (b) => {
+    if (b.booking_date) return new Date(b.booking_date + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+    return DAYS[b.day_of_week] || '—';
+  };
+
+  // Find which pending bookings overlap each other (date + time)
   const pendingBookings = bookings.filter(b => b.status === 'pending');
-  const overlapMap = new Map(); // id → [{ name, time }]
+  const overlapMap = new Map();
   for (let i = 0; i < pendingBookings.length; i++) {
     for (let j = i + 1; j < pendingBookings.length; j++) {
       const a = pendingBookings[i], b2 = pendingBookings[j];
-      if (a.day_of_week === b2.day_of_week &&
+      const sameDate = a.booking_date && b2.booking_date
+        ? a.booking_date.slice(0,10) === b2.booking_date.slice(0,10)
+        : a.day_of_week === b2.day_of_week;
+      if (sameDate &&
           toMin(a.booked_start) < toMin(b2.booked_end) &&
           toMin(a.booked_end) > toMin(b2.booked_start)) {
         if (!overlapMap.has(a.id)) overlapMap.set(a.id, []);
@@ -504,10 +500,15 @@ function BookingsPanel({ stadiumId, stadiumName }) {
       <div className="bookings-panel-header">
         <h3 className="section-title">Bookings — {stadiumName}</h3>
         <div className="bookings-filters">
-          <select value={filterDay} onChange={e=>setFilterDay(e.target.value)} className="filter-select">
-            <option value="all">All Days</option>
-            {DAYS.map((d,i)=><option key={i} value={i}>{d}</option>)}
-          </select>
+          <input
+            type="date"
+            value={filterDate}
+            onChange={e=>setFilterDate(e.target.value)}
+            className="filter-select"
+            title="Filter by specific date"
+            style={{colorScheme:'dark'}}
+          />
+          {filterDate && <button onClick={()=>setFilterDate('')} className="clear-filters" style={{padding:'6px 10px'}}>✕</button>}
           <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="filter-select">
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
@@ -518,7 +519,7 @@ function BookingsPanel({ stadiumId, stadiumName }) {
       </div>
 
       {loading && <div className="center-spinner"><span className="spinner large"/></div>}
-      {!loading && filtered.length===0 && <div className="empty-state"><div className="empty-icon"><IconBookmark/></div><p>No bookings{filterDay!=="all"||filterStatus!=="all"?" matching filters":""}</p></div>}
+      {!loading && filtered.length===0 && <div className="empty-state"><div className="empty-icon"><IconBookmark/></div><p>No bookings{filterDate||filterStatus!=="all"?" matching filters":""}</p></div>}
 
       {!loading && overlappingIds.size > 0 && (
         <div style={{display:'flex',alignItems:'center',gap:10,padding:'12px 16px',background:'rgba(250,204,21,0.10)',border:'1px solid rgba(250,204,21,0.35)',borderRadius:12,marginBottom:12,color:'#facc15',fontWeight:600,fontSize:13}}>
@@ -553,7 +554,7 @@ function BookingsPanel({ stadiumId, stadiumName }) {
               </div>
             </div>
             <div className="booking-slot-info">
-              <span className="booking-day">{DAYS[b.day_of_week]}</span>
+              <span className="booking-day">{fmtBookingDate(b)}</span>
               <span className="booking-time">{b.booked_start?.slice(0,5)} – {b.booked_end?.slice(0,5)}</span>
               {b.note && <span className="booking-note">"{b.note}"</span>}
             </div>

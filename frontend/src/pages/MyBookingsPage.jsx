@@ -122,7 +122,11 @@ function MyBookingsPage() {
             </div>
 
             <div className="booking-slot-info">
-              <span className="booking-day">{DAYS[b.day_of_week]}</span>
+              <span className="booking-day">
+                {b.booking_date
+                  ? new Date(b.booking_date + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' })
+                  : DAYS[b.day_of_week]}
+              </span>
               <span className="booking-time">{b.booked_start?.slice(0,5)} – {b.booked_end?.slice(0,5)}</span>
               <span className="booking-price">₪{Number(b.price_per_hour).toLocaleString()}/hr</span>
               {b.note&&<span className="booking-note">"{b.note}"</span>}

@@ -313,4 +313,94 @@ router.post('/:id/reset-schedule', authenticate, requireOwner, async (req, res) 
   finally { client.release(); }
 });
 
+// ══════════════════════════════════════════════════════════════════
+//  DATE-BASED BOOKING SYSTEM (dynamic — derived from weekly schedule)
+// ══════════════════════════════════════════════════════════════════
+
+// GET /api/stadiums/:id/date-slots?date=YYYY-MM-DD
+// Derives available slots from weekly schedule for the given date's day-of-week.
+// Returns free slot windows + confirmed + pending bookings for that date.
+router.get('/:id/date-slots', authenticate, async (req, res) => {
+  const dateStr = req.query.date;
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr))
+    return res.status(400).json({ error: 'date parameter required (YYYY-MM-DD)' });
+  try {
+    const dow = new Date(dateStr + 'T12:00:00').getDay();
+    const [slotsRes, bookingsRes, pendingRes] = await Promise.all([
+      pool.query(
+        `SELECT id, slot_start, slot_end FROM stadium_schedule
+         WHERE stadium_id=$1 AND day_of_week=$2 AND is_available=TRUE ORDER BY slot_start`,
+        [req.params.id, dow]
+      ),
+      pool.query(
+        `SELECT booked_start, booked_end FROM bookings
+         WHERE stadium_id=$1 AND booking_date=$2 AND status='confirmed'`,
+        [req.params.id, dateStr]
+      ),
+      pool.query(
+        `SELECT booked_start, booked_end FROM bookings
+         WHERE stadium_id=$1 AND booking_date=$2 AND status='pending'`,
+        [req.params.id, dateStr]
+      )
+    ]);
+    res.json({ slots: slotsRes.rows, bookings: bookingsRes.rows, pending: pendingRes.rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
+// GET /api/stadiums/:id/month-availability?year=YYYY&month=M
+// Returns per-day status for a full month: available / partial / full / closed / past
+router.get('/:id/month-availability', authenticate, async (req, res) => {
+  const year  = parseInt(req.query.year);
+  const month = parseInt(req.query.month); // 1-12
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12)
+    return res.status(400).json({ error: 'year and month (1-12) required' });
+  try {
+    // Weekly schedule total minutes per day-of-week
+    const schedRes = await pool.query(
+      `SELECT day_of_week,
+              SUM(EXTRACT(EPOCH FROM (slot_end::time - slot_start::time))/60)::int AS total_min
+       FROM stadium_schedule
+       WHERE stadium_id=$1 AND is_available=TRUE
+       GROUP BY day_of_week`,
+      [req.params.id]
+    );
+    const schedByDow = {};
+    for (const r of schedRes.rows) schedByDow[r.day_of_week] = r.total_min;
+
+    // Confirmed bookings grouped by date for the requested month
+    const monthStart = `${year}-${String(month).padStart(2,'0')}-01`;
+    const bookRes = await pool.query(
+      `SELECT booking_date::text AS date,
+              SUM(EXTRACT(EPOCH FROM (booked_end::time - booked_start::time))/60)::int AS booked_min
+       FROM bookings
+       WHERE stadium_id=$1
+         AND booking_date >= $2::date
+         AND booking_date < ($2::date + INTERVAL '1 month')
+         AND status='confirmed'
+       GROUP BY booking_date`,
+      [req.params.id, monthStart]
+    );
+    const bookedByDate = {};
+    for (const r of bookRes.rows) bookedByDate[r.date] = r.booked_min;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const result = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dow = new Date(dateStr + 'T12:00:00').getDay();
+      const totalMin = schedByDow[dow] || 0;
+      const bookedMin = bookedByDate[dateStr] || 0;
+      let status;
+      if (dateStr < today)              status = 'past';
+      else if (totalMin === 0)          status = 'closed';
+      else if (bookedMin >= totalMin)   status = 'full';
+      else if (bookedMin > 0)           status = 'partial';
+      else                              status = 'available';
+      result.push({ date: dateStr, status });
+    }
+    res.json(result);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
 module.exports = router;
