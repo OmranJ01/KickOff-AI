@@ -50,11 +50,20 @@ router.post('/login', async (req, res) => {
 
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const r = await pool.query('SELECT id,name,email,user_type,city,country,avatar_url FROM users WHERE id=$1', [req.user.id]);
+    const r = await pool.query('SELECT id,name,email,user_type,city,country,avatar_url,bio FROM users WHERE id=$1', [req.user.id]);
     const u = r.rows[0];
     if (!u) return res.status(404).json({ error: 'User not found' });
-    res.json({ id: u.id, name: u.name, email: u.email, userType: u.user_type, city: u.city, country: u.country, avatarUrl: u.avatar_url });
+    res.json({ id: u.id, name: u.name, email: u.email, userType: u.user_type, city: u.city, country: u.country, avatarUrl: u.avatar_url, bio: u.bio || '' });
   } catch (err) { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.patch('/bio', authenticate, async (req, res) => {
+  const { bio } = req.body;
+  if (bio !== null && bio !== undefined && bio.length > 300) return res.status(400).json({ error: 'Bio max 300 characters' });
+  try {
+    await pool.query('UPDATE users SET bio=$1 WHERE id=$2', [bio || null, req.user.id]);
+    res.json({ bio: bio || '' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
 // Upload/update profile picture (base64), or remove it by sending null

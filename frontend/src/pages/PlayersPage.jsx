@@ -2,19 +2,108 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { apiCall, DAYS, DAYS_SHORT, SURFACES, SURFACE_COLOR, STATUS_COLOR, STATUS_BG, toMin, fromMin, hoursInRange, computeFreeWindows, validEndTimes, validStartTimes, IconBall, IconStadium, IconLogout, IconSettings, IconEye, IconUsers, IconHome, IconSearch, IconCheck, IconX, IconUserPlus, IconUserMinus, IconMapPin, IconClock, IconPlus, IconEdit, IconTrash, IconCalendar, IconPhone, IconDollar, IconUsers2, IconToggle, IconFilter, IconBell, IconChat, IconGroup, IconSend, IconArrowLeft, IconShield, IconBookmark, IconArrow, Avatar, ImagePicker, PhotoZoomModal } from "../utils";
 
 
-function PlayerCard({ player, currentUserId, onAction, actionLoading, onViewAvailability }) {
+function PlayerProfileModal({ playerId, onClose }) {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiCall(`/players/${playerId}/profile`)
+      .then(setProfile).catch(() => {}).finally(() => setLoading(false));
+  }, [playerId]);
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <h2 className="modal-title">{profile?.name || '…'}</h2>
+          <button className="modal-close" onClick={onClose}><IconX /></button>
+        </div>
+        <div className="modal-form">
+          {loading ? (
+            <div className="center-spinner"><span className="spinner large" /></div>
+          ) : !profile ? (
+            <div className="empty-state"><p>Failed to load profile</p></div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+                <Avatar name={profile.name} src={profile.avatar_url} size={72} />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 18 }}>{profile.name}</div>
+                  {[profile.city, profile.country].filter(Boolean).join(', ') && (
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <IconMapPin /> {[profile.city, profile.country].filter(Boolean).join(', ')}
+                    </div>
+                  )}
+                  {profile.stats?.top_position && (
+                    <div style={{ marginTop: 6 }}>
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.2)' }}>
+                        {profile.stats.top_position}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {profile.bio && (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 20, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, fontStyle: 'italic' }}>
+                  "{profile.bio}"
+                </div>
+              )}
+
+              {profile.stats?.matches_played > 0 && (
+                <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+                  {[
+                    { label: 'Matches', value: profile.stats.matches_played, color: '#60a5fa' },
+                    { label: 'Goals',   value: profile.stats.total_goals,    color: '#4ade80' },
+                    { label: 'Assists', value: profile.stats.total_assists,  color: '#fb923c' },
+                  ].map(s => (
+                    <div key={s.label} style={{ flex: 1, textAlign: 'center', padding: '10px 8px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                  Friends · {profile.friends?.length || 0}
+                </div>
+                {profile.friends?.length > 0 ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {profile.friends.map(f => (
+                      <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 999, fontSize: 13 }}>
+                        <Avatar name={f.name} src={f.avatar_url} size={22} />
+                        <span>{f.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No friends yet</div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlayerCard({ player, currentUserId, onAction, actionLoading, onViewAvailability, onViewProfile }) {
   const { id, name, city, country, friendship_status, friendship_requester, has_availability } = player;
   const isFriend = friendship_status==="accepted";
   const isPendingFromMe = friendship_status==="pending"&&Number(friendship_requester)===currentUserId;
   const isPendingToMe = friendship_status==="pending"&&Number(friendship_requester)!==currentUserId;
   const locationStr = [city, country].filter(Boolean).join(', ');
 
-
   return (
     <div className="player-card">
-      <Avatar name={name} src={player.avatar_url}/>
+      <div style={{ cursor: 'pointer' }} onClick={() => onViewProfile && onViewProfile(id)}>
+        <Avatar name={name} src={player.avatar_url}/>
+      </div>
       <div className="player-info">
-        <span className="player-name">{name}</span>
+        <span className="player-name" style={{ cursor: 'pointer' }} onClick={() => onViewProfile && onViewProfile(id)}>{name}</span>
         {locationStr&&<span className="player-meta"><IconMapPin/> {locationStr}</span>}
         {has_availability&&<span className="avail-badge">📅 Has availability</span>}
       </div>
@@ -168,6 +257,7 @@ function PlayersPage({ user }) {
   const [actionLoading, setActionLoading] = useState(null);
   const [viewAvailPlayer, setViewAvailPlayer] = useState(null);
   const [showMyAvail, setShowMyAvail] = useState(false);
+  const [viewProfileId, setViewProfileId] = useState(null);
   const debounceRef = useRef(null);
 
   const loadFriends = useCallback(async () => {
@@ -241,11 +331,11 @@ function PlayersPage({ user }) {
           {!hasSearched && <div className="empty-state"><div className="empty-icon"><IconSearch/></div><p>Filter players by name, country, city or availability day</p></div>}
           {hasSearched && !searching && searchResults.length===0 && <div className="empty-state"><div className="empty-icon"><IconUsers/></div><p>No players found</p></div>}
           <div className="player-list">
-            {searchResults.map(p => <PlayerCard key={p.id} player={p} currentUserId={user.id} onAction={handleAction} actionLoading={actionLoading} onViewAvailability={setViewAvailPlayer}/>)}
+            {searchResults.map(p => <PlayerCard key={p.id} player={p} currentUserId={user.id} onAction={handleAction} actionLoading={actionLoading} onViewAvailability={setViewAvailPlayer} onViewProfile={setViewProfileId}/>)}
           </div>
         </div>
       )}
-      {tab==="friends" && (<div className="tab-content">{friends.length===0?<div className="empty-state"><div className="empty-icon"><IconUsers/></div><p>No friends yet!</p></div>:<div className="player-list">{friends.map(f=><PlayerCard key={f.id} player={{...f,friendship_status:"accepted"}} currentUserId={user.id} onAction={handleAction} actionLoading={actionLoading} onViewAvailability={setViewAvailPlayer}/>)}</div>}</div>)}
+      {tab==="friends" && (<div className="tab-content">{friends.length===0?<div className="empty-state"><div className="empty-icon"><IconUsers/></div><p>No friends yet!</p></div>:<div className="player-list">{friends.map(f=><PlayerCard key={f.id} player={{...f,friendship_status:"accepted"}} currentUserId={user.id} onAction={handleAction} actionLoading={actionLoading} onViewAvailability={setViewAvailPlayer} onViewProfile={setViewProfileId}/>)}</div>}</div>)}
       {tab==="requests" && (<div className="tab-content">
         {incoming.length>0&&<div className="requests-section"><h3 className="section-label">Incoming <span className="count-badge green">{incoming.length}</span></h3><div className="player-list">{incoming.map(p=><PlayerCard key={p.id} player={{...p,friendship_status:"pending",friendship_requester:p.id}} currentUserId={user.id} onAction={handleAction} actionLoading={actionLoading}/>)}</div></div>}
         {outgoing.length>0&&<div className="requests-section"><h3 className="section-label">Sent</h3><div className="player-list">{outgoing.map(p=><PlayerCard key={p.id} player={{...p,friendship_status:"pending",friendship_requester:user.id}} currentUserId={user.id} onAction={handleAction} actionLoading={actionLoading}/>)}</div></div>}
@@ -253,9 +343,11 @@ function PlayersPage({ user }) {
       </div>)}
       {viewAvailPlayer && <PlayerAvailabilityModal player={viewAvailPlayer} onClose={()=>setViewAvailPlayer(null)}/>}
       {showMyAvail && <MyAvailabilityModal onClose={()=>setShowMyAvail(false)}/>}
+      {viewProfileId && <PlayerProfileModal playerId={viewProfileId} onClose={()=>setViewProfileId(null)}/>}
     </div>
   );
 }
 
 
+export { PlayerProfileModal };
 export default PlayersPage;

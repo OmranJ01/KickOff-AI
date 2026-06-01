@@ -148,6 +148,40 @@ router.get('/friends/requests/incoming', authenticate, async (req, res) => {
 
 
 
+router.get('/players/:id/profile', authenticate, async (req, res) => {
+  try {
+    const profileId = parseInt(req.params.id);
+
+    const [userRes, statsRes, friendsRes] = await Promise.all([
+      pool.query(
+        `SELECT id, name, city, country, avatar_url, bio FROM users WHERE id=$1 AND user_type='player'`,
+        [profileId]
+      ),
+      pool.query(
+        `SELECT
+           COUNT(DISTINCT pms.match_result_id)::int        AS matches_played,
+           COALESCE(SUM(pms.goals),   0)::int              AS total_goals,
+           COALESCE(SUM(pms.assists), 0)::int              AS total_assists,
+           MODE() WITHIN GROUP (ORDER BY pms.position)     AS top_position
+         FROM player_match_stats pms WHERE pms.player_id=$1`,
+        [profileId]
+      ),
+      pool.query(
+        `SELECT u.id, u.name, u.avatar_url
+         FROM friendships f
+         JOIN users u ON (CASE WHEN f.requester_id=$1 THEN f.addressee_id ELSE f.requester_id END = u.id)
+         WHERE (f.requester_id=$1 OR f.addressee_id=$1) AND f.status='accepted'
+         ORDER BY u.name LIMIT 20`,
+        [profileId]
+      ),
+    ]);
+
+    if (!userRes.rows.length) return res.status(404).json({ error: 'Player not found' });
+    const u = userRes.rows[0];
+    res.json({ ...u, stats: statsRes.rows[0], friends: friendsRes.rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
 router.get('/friends/requests/outgoing', authenticate, async (req, res) => {
   try {
     const r = await pool.query(

@@ -6,6 +6,20 @@ function SettingsPage({ user, onAvatarChange, onLogout, isOwner }) {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [zoomPhoto, setZoomPhoto] = useState(null);
+  const [bio, setBio] = useState(user.bio || '');
+  const [bioSaving, setBioSaving] = useState(false);
+  const [bioSaved, setBioSaved] = useState(false);
+
+  const saveBio = async () => {
+    setBioSaving(true);
+    try {
+      await apiCall('/auth/bio', 'PATCH', { bio });
+      onAvatarChange({ bio });
+      setBioSaved(true);
+      setTimeout(() => setBioSaved(false), 2500);
+    } catch (err) { alert('Failed to save: ' + err.message); }
+    setBioSaving(false);
+  };
 
   // ── Avatar upload ──────────────────────────────────────────────
   const handleAvatarFile = async (e) => {
@@ -173,6 +187,27 @@ function SettingsPage({ user, onAvatarChange, onLogout, isOwner }) {
                     </div>
                     <span style={{fontSize:12,color:'var(--text-muted)',marginTop:4}}>Message bubble</span>
                   </div>
+                </div>
+              </div>
+
+              {/* Bio editor */}
+              <div style={{ marginTop: 32 }}>
+                <div className="settings-section-header" style={{ marginBottom: 12 }}>
+                  <h2 className="settings-section-title" style={{ fontSize: 16 }}>Bio</h2>
+                  <p className="settings-section-sub">Tell other players who you are. Shown on your public profile.</p>
+                </div>
+                <textarea
+                  value={bio}
+                  onChange={e => setBio(e.target.value.slice(0, 300))}
+                  placeholder="e.g. Midfielder based in London, love 5-a-side, available weekends..."
+                  rows={3}
+                  style={{ width: '100%', resize: 'vertical', minHeight: 80, boxSizing: 'border-box' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{bio.length}/300</span>
+                  <button className="submit-btn" style={{ width: 'auto', padding: '8px 20px' }} onClick={saveBio} disabled={bioSaving}>
+                    {bioSaving ? <><span className="spinner sm" /> Saving…</> : bioSaved ? '✓ Saved!' : 'Save Bio'}
+                  </button>
                 </div>
               </div>
             </div>

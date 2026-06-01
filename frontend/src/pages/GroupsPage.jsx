@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiCall, DAYS, DAYS_SHORT, SURFACES, SURFACE_COLOR, STATUS_COLOR, STATUS_BG, toMin, fromMin, hoursInRange, computeFreeWindows, validEndTimes, validStartTimes, IconBall, IconStadium, IconLogout, IconSettings, IconEye, IconUsers, IconHome, IconSearch, IconCheck, IconX, IconUserPlus, IconUserMinus, IconMapPin, IconClock, IconPlus, IconEdit, IconTrash, IconCalendar, IconPhone, IconDollar, IconUsers2, IconToggle, IconFilter, IconBell, IconChat, IconGroup, IconSend, IconArrowLeft, IconShield, IconBookmark, IconArrow, Avatar, ImagePicker, PhotoZoomModal } from "../utils";
 import socket from "../socket";
+import { PlayerProfileModal } from "./PlayersPage";
 function GroupsPage({ user, initialGroupId }) {
   const [tab, setTab] = useState('my');
   const [groups, setGroups] = useState([]);
@@ -286,6 +287,7 @@ function GroupDetail({ group, user, onBack }) {
   const [teamBalance, setTeamBalance] = useState(null);
   const [balancing, setBalancing] = useState(false);
   const [balanceError, setBalanceError] = useState('');
+  const [viewProfileId, setViewProfileId] = useState(null);
 
   const loadDetail = useCallback(async () => {
     try { setDetail(await apiCall(`/groups/${group.id}`)); } catch {}
@@ -596,7 +598,7 @@ function GroupDetail({ group, user, onBack }) {
                   <Avatar name={m.name} src={m.avatar_url} size={42}/>
                 </div>
                 <div className="player-info">
-                  <span className="player-name" style={{cursor:'pointer'}} onClick={() => setZoomPhoto({ name: m.name, src: m.avatar_url })}>
+                  <span className="player-name" style={{cursor:'pointer'}} onClick={() => m.id !== user.id && setViewProfileId(m.id)}>
                     {m.name}{m.id === user.id ? ' (you)' : ''}
                   </span>
                   {[m.city,m.country].filter(Boolean).join(', ') && <span className="player-meta"><IconMapPin /> {[m.city,m.country].filter(Boolean).join(', ')}</span>}
@@ -638,6 +640,8 @@ function GroupDetail({ group, user, onBack }) {
           )}
         </div>
       )}
+      {viewProfileId && <PlayerProfileModal playerId={viewProfileId} onClose={() => setViewProfileId(null)} />}
+
       {activeTab === 'matches' && (
         <MatchesTab group={currentGroup} user={user} isAdmin={isAdmin} />
       )}
