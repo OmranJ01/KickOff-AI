@@ -7,7 +7,9 @@ function ChatWindow({ user, partner, onBack }) {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [zoomPhoto, setZoomPhoto] = useState(null);
-  const [ctxMenu, setCtxMenu] = useState(null); // { msgId, isMe, x, y }
+  const [ctxMenu, setCtxMenu] = useState(null);
+  const [blockStatus, setBlockStatus] = useState({ iBlockedThem: false, theyBlockedMe: false });
+  const [blockLoading, setBlockLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const holdTimer = useRef(null);
 
@@ -17,14 +19,23 @@ function ChatWindow({ user, partner, onBack }) {
   }, [partner.partner_id]);
 
   useEffect(() => {
+    apiCall(`/messages/block-status/${partner.partner_id}`)
+      .then(s => setBlockStatus(s)).catch(() => {});
+  }, [partner.partner_id]);
+
+  useEffect(() => {
     loadMessages();
     const onNewMessage = (msg) => {
       if (msg.sender_id === partner.partner_id) {
         setMessages(prev => [...prev, msg]);
       }
     };
+    const onDeleted = ({ id }) => {
+      setMessages(prev => prev.map(m => String(m.id) === String(id) ? { ...m, deleted_for_all: true, content: null } : m));
+    };
     socket.on('new_message', onNewMessage);
-    return () => socket.off('new_message', onNewMessage);
+    socket.on('message_deleted', onDeleted);
+    return () => { socket.off('new_message', onNewMessage); socket.off('message_deleted', onDeleted); };
   }, [loadMessages, partner.partner_id]);
 
   useEffect(() => {
@@ -73,6 +84,21 @@ function ChatWindow({ user, partner, onBack }) {
   };
   const onHoldEnd = () => clearTimeout(holdTimer.current);
 
+  const toggleBlock = async () => {
+    setBlockLoading(true);
+    try {
+      if (blockStatus.iBlockedThem) {
+        await apiCall(`/messages/block/${partner.partner_id}`, 'DELETE');
+        setBlockStatus(s => ({ ...s, iBlockedThem: false }));
+      } else {
+        if (!window.confirm(`Block ${partner.partner_name}? They won't be able to message you.`)) { setBlockLoading(false); return; }
+        await apiCall(`/messages/block/${partner.partner_id}`, 'POST');
+        setBlockStatus(s => ({ ...s, iBlockedThem: true }));
+      }
+    } catch {}
+    setBlockLoading(false);
+  };
+
   const formatTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
@@ -91,17 +117,21 @@ function ChatWindow({ user, partner, onBack }) {
       {/* Header */}
       <div className="chat-main-header">
         <button className="back-btn" onClick={onBack}><IconArrowLeft /></button>
-        <div style={{cursor:'pointer'}} onClick={() => setZoomPhoto({ name: partner.partner_name, src: partner.partner_avatar })}>
-          <Avatar name={partner.partner_name} src={partner.partner_avatar} size={40}/>
+        <div style={{cursor: blockStatus.theyBlockedMe ? 'default' : 'pointer'}}
+          onClick={() => !blockStatus.theyBlockedMe && setZoomPhoto({ name: partner.partner_name, src: partner.partner_avatar })}>
+          <Avatar name={blockStatus.theyBlockedMe ? 'App User' : partner.partner_name} src={blockStatus.theyBlockedMe ? null : partner.partner_avatar} size={40}/>
         </div>
-        <div>
-          <span className="chat-partner-name" style={{cursor:'pointer'}}
-            onClick={() => setZoomPhoto({ name: partner.partner_name, src: partner.partner_avatar })}>
-            {partner.partner_name}
-          </span>
-          {[partner.partner_city, partner.partner_country].filter(Boolean).join(', ') && <span className="chat-partner-loc"><IconMapPin /> {[partner.partner_city, partner.partner_country].filter(Boolean).join(', ')}</span>}
-          {partner.partner_role && <span className="chat-partner-loc" style={{color:'#f59e0b'}}>⚽ {partner.partner_role}</span>}
+        <div style={{flex:1}}>
+          <span className="chat-partner-name">{blockStatus.theyBlockedMe ? 'App User' : partner.partner_name}</span>
+          {!blockStatus.theyBlockedMe && [partner.partner_city, partner.partner_country].filter(Boolean).join(', ') && <span className="chat-partner-loc"><IconMapPin /> {[partner.partner_city, partner.partner_country].filter(Boolean).join(', ')}</span>}
+          {partner.partner_role && !blockStatus.theyBlockedMe && <span className="chat-partner-loc" style={{color:'#f59e0b'}}>⚽ {partner.partner_role}</span>}
         </div>
+        <button
+          onClick={toggleBlock} disabled={blockLoading || blockStatus.theyBlockedMe}
+          style={{fontSize:12,padding:'5px 12px',borderRadius:8,border:`1px solid ${blockStatus.iBlockedThem?'rgba(74,222,128,0.35)':'rgba(239,68,68,0.35)'}`,background:blockStatus.iBlockedThem?'rgba(74,222,128,0.08)':'rgba(239,68,68,0.08)',color:blockStatus.iBlockedThem?'#4ade80':'#f87171',cursor:blockStatus.theyBlockedMe?'default':'pointer',opacity:blockStatus.theyBlockedMe?0:1}}
+        >
+          {blockLoading ? <span className="spinner sm"/> : blockStatus.iBlockedThem ? 'Unblock' : '🚫 Block'}
+        </button>
       </div>
 
       <div className="messages-list">
@@ -147,23 +177,35 @@ function ChatWindow({ user, partner, onBack }) {
         })}
         <div ref={messagesEndRef} />
       </div>
-      <form className="message-input-row" onSubmit={sendMessage}>
-        <input value={newMsg} onChange={e => setNewMsg(e.target.value)}
-          placeholder="Type a message..." className="message-input" disabled={sending} />
-        <button type="submit" disabled={!newMsg.trim() || sending}
-          style={{
-            flexShrink: 0, width: 44, height: 44, borderRadius: '50%',
-            background: !newMsg.trim() || sending ? 'rgba(96,165,250,0.2)' : '#3b82f6',
-            border: 'none', cursor: !newMsg.trim() || sending ? 'not-allowed' : 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'background 0.2s', color: '#fff',
-          }}>
-          {sending
-            ? <span className="spinner sm" />
-            : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          }
-        </button>
-      </form>
+      {blockStatus.iBlockedThem && (
+        <div style={{padding:'12px 16px',textAlign:'center',fontSize:13,color:'#f87171',background:'rgba(239,68,68,0.07)',borderTop:'1px solid rgba(239,68,68,0.2)'}}>
+          You blocked this person. <button onClick={toggleBlock} style={{color:'#4ade80',background:'none',border:'none',cursor:'pointer',textDecoration:'underline',fontSize:13}}>Unblock</button>
+        </div>
+      )}
+      {blockStatus.theyBlockedMe && (
+        <div style={{padding:'12px 16px',textAlign:'center',fontSize:13,color:'var(--text-muted)',background:'var(--surface)',borderTop:'1px solid var(--border)'}}>
+          You can't reply to this conversation
+        </div>
+      )}
+      {!blockStatus.iBlockedThem && !blockStatus.theyBlockedMe && (
+        <form className="message-input-row" onSubmit={sendMessage}>
+          <input value={newMsg} onChange={e => setNewMsg(e.target.value)}
+            placeholder="Type a message..." className="message-input" disabled={sending} />
+          <button type="submit" disabled={!newMsg.trim() || sending}
+            style={{
+              flexShrink: 0, width: 44, height: 44, borderRadius: '50%',
+              background: !newMsg.trim() || sending ? 'rgba(96,165,250,0.2)' : '#3b82f6',
+              border: 'none', cursor: !newMsg.trim() || sending ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.2s', color: '#fff',
+            }}>
+            {sending
+              ? <span className="spinner sm" />
+              : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            }
+          </button>
+        </form>
+      )}
     </>
   );
 }

@@ -10,8 +10,12 @@ router.get('/conversations', authenticate, async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT DISTINCT ON (partner_id)
-         partner_id, partner_name, partner_city, partner_country, partner_avatar,
-         last_message, last_message_at, unread_count
+         t.partner_id,
+         CASE WHEN b.id IS NOT NULL THEN 'App User' ELSE t.partner_name END AS partner_name,
+         t.partner_city, t.partner_country,
+         CASE WHEN b.id IS NOT NULL THEN NULL ELSE t.partner_avatar END AS partner_avatar,
+         t.last_message, t.last_message_at, t.unread_count,
+         (b.id IS NOT NULL) AS blocked_by_partner
        FROM (
          SELECT
            CASE WHEN m.sender_id=$1 THEN m.receiver_id ELSE m.sender_id END AS partner_id,
@@ -25,10 +29,41 @@ router.get('/conversations', authenticate, async (req, res) => {
          WHERE m.sender_id=$1 OR m.receiver_id=$1
          ORDER BY m.created_at DESC
        ) t
+       LEFT JOIN blocks b ON b.blocker_id=t.partner_id AND b.blocked_id=$1
        ORDER BY partner_id, last_message_at DESC`,
       [req.user.id]
     );
     res.json(r.rows);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
+// Block status between current user and another user
+router.get('/block-status/:userId', authenticate, async (req, res) => {
+  try {
+    const [iBlock, theyBlock] = await Promise.all([
+      pool.query('SELECT id FROM blocks WHERE blocker_id=$1 AND blocked_id=$2', [req.user.id, req.params.userId]),
+      pool.query('SELECT id FROM blocks WHERE blocker_id=$1 AND blocked_id=$2', [req.params.userId, req.user.id]),
+    ]);
+    res.json({ iBlockedThem: iBlock.rows.length > 0, theyBlockedMe: theyBlock.rows.length > 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
+// Block a user
+router.post('/block/:userId', authenticate, async (req, res) => {
+  try {
+    await pool.query(
+      'INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+      [req.user.id, req.params.userId]
+    );
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
+// Unblock a user
+router.delete('/block/:userId', authenticate, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM blocks WHERE blocker_id=$1 AND blocked_id=$2', [req.user.id, req.params.userId]);
+    res.json({ success: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
@@ -61,6 +96,12 @@ router.get('/:partnerId', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   const { receiverId, content } = req.body;
   if (!receiverId || !content?.trim()) return res.status(400).json({ error: 'receiverId and content required' });
+
+  const blockCheck = await pool.query(
+    'SELECT id FROM blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1) LIMIT 1',
+    [req.user.id, receiverId]
+  );
+  if (blockCheck.rows.length) return res.status(403).json({ error: 'You cannot message this user' });
 
   const client = await pool.connect();
 
@@ -109,7 +150,12 @@ router.delete('/:id', authenticate, async (req, res) => {
     if (scope === 'all') {
       if (msg.sender_id !== req.user.id) return res.status(403).json({ error: 'Only sender can delete for everyone' });
       await pool.query('UPDATE messages SET deleted_for_all=TRUE WHERE id=$1', [req.params.id]);
-    } 
+      // Notify the other person in real-time
+      const otherId = msg.sender_id === req.user.id ? msg.receiver_id : msg.sender_id;
+      const io = getIo();
+      const socketId = getOnlineUsers().get(Number(otherId));
+      if (io && socketId) io.to(socketId).emit('message_deleted', { id: req.params.id });
+    }
 
     else {
       if (msg.sender_id !== req.user.id && msg.receiver_id !== req.user.id)

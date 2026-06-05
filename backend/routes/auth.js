@@ -57,6 +57,16 @@ router.get('/me', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Server error' }); }
 });
 
+router.patch('/name', authenticate, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+  if (name.trim().length > 100) return res.status(400).json({ error: 'Name max 100 characters' });
+  try {
+    await pool.query('UPDATE users SET name=$1 WHERE id=$2', [name.trim(), req.user.id]);
+    res.json({ name: name.trim() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
 router.patch('/bio', authenticate, async (req, res) => {
   const { bio } = req.body;
   if (bio !== null && bio !== undefined && bio.length > 300) return res.status(400).json({ error: 'Bio max 300 characters' });

@@ -167,7 +167,7 @@ router.get('/stadium/:stadiumId', authenticate, requireOwner, async (req, res) =
     const check = await pool.query('SELECT id FROM stadiums WHERE id=$1 AND owner_id=$2', [req.params.stadiumId, req.user.id]);
     if (!check.rows.length) return res.status(404).json({ error: 'Stadium not found' });
     const r = await pool.query(
-      `SELECT b.*, u.name AS player_name, u.email AS player_email
+      `SELECT b.*, u.name AS player_name, u.email AS player_email, u.avatar_url AS player_avatar
        FROM bookings b JOIN users u ON b.player_id=u.id
        WHERE b.stadium_id=$1
        ORDER BY

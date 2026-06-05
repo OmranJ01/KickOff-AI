@@ -470,7 +470,7 @@ function BookingsPanel({ stadiumId, stadiumName }) {
   );
 
   const fmtBookingDate = (b) => {
-    if (b.booking_date) return new Date(b.booking_date + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+    if (b.booking_date) return new Date(String(b.booking_date).slice(0,10) + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
     return DAYS[b.day_of_week] || '—';
   };
 
@@ -547,7 +547,7 @@ function BookingsPanel({ stadiumId, stadiumName }) {
             )}
             <div className={`booking-card owner${hasConflict ? ' overlap-warning' : ''}`} style={hasConflict?{borderTopLeftRadius:0,borderTopRightRadius:0}:{}}>
             <div className="booking-card-left">
-              <Avatar name={b.player_name} size={36}/>
+              <Avatar name={b.player_name} src={b.player_avatar} size={36}/>
               <div>
                 <div className="booking-player-name">{b.player_name}</div>
                 <div className="booking-meta">{b.player_email}</div>
@@ -589,9 +589,141 @@ function BookingsPanel({ stadiumId, stadiumName }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  OWNER: ANALYTICS MODAL
+// ══════════════════════════════════════════════════════════════════
+const DOW_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function AnalyticsModal({ stadium, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiCall(`/stadiums/${stadium.id}/analytics`)
+      .then(d => setData(d))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [stadium.id]);
+
+  const dowMap = {};
+  if (data) for (const r of data.byDow) dowMap[r.dow] = r.bookings;
+  const maxDow = data ? Math.max(...Array.from({length:7},(_,i)=>dowMap[i]||0), 1) : 1;
+  const maxHour = data?.popularHours?.[0]?.count || 1;
+
+  const last30 = [];
+  if (data) {
+    const dateMap = {};
+    for (const r of data.last30Days) dateMap[r.date] = r.confirmed;
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().slice(0, 10);
+      last30.push({ date: dateStr, count: dateMap[dateStr] || 0 });
+    }
+  }
+  const maxDay = last30.length ? Math.max(...last30.map(d => d.count), 1) : 1;
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal analytics-modal">
+        <div className="modal-header">
+          <div>
+            <h2 className="modal-title">Analytics</h2>
+            <p style={{fontSize:12,color:'var(--text-muted)',marginTop:3}}>{stadium.name}</p>
+          </div>
+          <button className="modal-close" onClick={onClose}><IconX/></button>
+        </div>
+
+        {loading && <div className="center-spinner" style={{padding:40}}><span className="spinner large"/></div>}
+
+        {!loading && data && (
+          <div className="analytics-body">
+
+            {/* Stat cards */}
+            <div className="analytics-stats-grid">
+              <div className="analytics-stat-card">
+                <div className="analytics-stat-value">{data.thisMonth.confirmed}</div>
+                <div className="analytics-stat-label">Bookings this month</div>
+              </div>
+              <div className="analytics-stat-card green">
+                <div className="analytics-stat-value">₪{data.thisMonth.revenue.toLocaleString()}</div>
+                <div className="analytics-stat-label">Revenue this month</div>
+              </div>
+              <div className="analytics-stat-card">
+                <div className="analytics-stat-value">{data.allTime.confirmed}</div>
+                <div className="analytics-stat-label">All-time bookings</div>
+              </div>
+              <div className="analytics-stat-card yellow">
+                <div className="analytics-stat-value">{data.thisMonth.pending}</div>
+                <div className="analytics-stat-label">Pending now</div>
+              </div>
+            </div>
+
+            {/* Bookings by day of week */}
+            <div className="analytics-section">
+              <div className="analytics-section-title">Bookings by Day</div>
+              <div className="analytics-dow-chart">
+                {DOW_LABELS.map((d, i) => {
+                  const count = dowMap[i] || 0;
+                  const pct = Math.round((count / maxDow) * 100);
+                  return (
+                    <div key={i} className="analytics-dow-col">
+                      <div className="analytics-dow-bar-wrap">
+                        <div className="analytics-dow-bar" style={{height:`${Math.max(pct, count?5:0)}%`}}/>
+                      </div>
+                      <div className="analytics-dow-count">{count || ''}</div>
+                      <div className="analytics-dow-label">{d}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Popular hours */}
+            {data.popularHours.length > 0 && (
+              <div className="analytics-section">
+                <div className="analytics-section-title">Popular Time Slots</div>
+                <div className="analytics-hours-list">
+                  {data.popularHours.map((h, i) => (
+                    <div key={i} className="analytics-hour-row">
+                      <span className="analytics-hour-label">{String(h.hour).padStart(2,'0')}:00</span>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill" style={{width:`${Math.round((h.count/maxHour)*100)}%`}}/>
+                      </div>
+                      <span className="analytics-bar-val">{h.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Last 30 days sparkline */}
+            <div className="analytics-section">
+              <div className="analytics-section-title">Last 30 Days</div>
+              <div className="analytics-sparkline">
+                {last30.map((d, i) => (
+                  <div
+                    key={i}
+                    className="analytics-spark-bar"
+                    style={{height:`${Math.max((d.count/maxDay)*100, d.count?8:2)}%`, opacity:d.count?1:0.18}}
+                    title={`${d.date}: ${d.count} booking${d.count!==1?'s':''}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div style={{textAlign:'center',fontSize:12,color:'var(--text-muted)'}}>
+              All-time revenue: <span style={{color:'var(--primary)',fontWeight:700}}>₪{data.allTime.revenue.toLocaleString()}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  OWNER: STADIUM CARD
 // ══════════════════════════════════════════════════════════════════
-function StadiumCard({ stadium, onEdit, onDelete, onToggle, onSchedule, onViewBookings }) {
+function StadiumCard({ stadium, onEdit, onDelete, onToggle, onSchedule, onViewBookings, onAnalytics }) {
   const [deleting, setDeleting] = useState(false);
   const [toggling, setToggling] = useState(false);
   const color = SURFACE_COLOR[stadium.surface]||"#4ade80";
@@ -624,6 +756,7 @@ function StadiumCard({ stadium, onEdit, onDelete, onToggle, onSchedule, onViewBo
       <div className="stadium-card-actions">
         <button className="action-btn muted" onClick={()=>onSchedule(stadium)}><IconCalendar/><span>Schedule</span></button>
         <button className="action-btn muted" onClick={()=>onViewBookings(stadium)}><IconBookmark/><span>Bookings</span></button>
+        <button className="action-btn muted" onClick={()=>onAnalytics(stadium)} style={{color:'#a78bfa',borderColor:'rgba(167,139,250,0.3)'}}><IconFilter/><span>Stats</span></button>
         <button className="action-btn primary" onClick={()=>onEdit(stadium)}><IconEdit/><span>Edit</span></button>
         <button className="action-btn muted" onClick={async()=>{setToggling(true);await onToggle(stadium.id);setToggling(false);}} disabled={toggling}>{toggling?<span className="spinner sm"/>:<><IconToggle on={stadium.is_active}/><span>{stadium.is_active?"Off":"On"}</span></>}</button>
         <button className="action-btn danger" onClick={async()=>{if(!window.confirm(`Delete "${stadium.name}"?`))return;setDeleting(true);await onDelete(stadium.id);setDeleting(false);}} disabled={deleting}>{deleting?<span className="spinner sm"/>:<IconTrash/>}</button>
@@ -642,6 +775,7 @@ function OwnerStadiumsPage({ initialBookingStadiumId }) {
   const [editing, setEditing] = useState(null);
   const [schedulingStadium, setSchedulingStadium] = useState(null);
   const [bookingsStadium, setBookingsStadium] = useState(null);
+  const [analyticsStadium, setAnalyticsStadium] = useState(null);
 
   const load = useCallback(async()=>{
     setLoading(true);
@@ -680,11 +814,13 @@ function OwnerStadiumsPage({ initialBookingStadiumId }) {
             onToggle={async id=>{try{await apiCall(`/stadiums/${id}/toggle`,"PATCH");await load();}catch{}}}
             onSchedule={s=>setSchedulingStadium(s)}
             onViewBookings={s=>setBookingsStadium(s)}
+            onAnalytics={s=>setAnalyticsStadium(s)}
           />
         ))}
       </div>
       {showModal&&<StadiumModal stadium={editing} onClose={()=>{setShowModal(false);setEditing(null);}} onSave={()=>{setShowModal(false);setEditing(null);load();}}/>}
       {schedulingStadium&&<ScheduleBuilder stadiumId={schedulingStadium.id} onClose={()=>setSchedulingStadium(null)}/>}
+      {analyticsStadium&&<AnalyticsModal stadium={analyticsStadium} onClose={()=>setAnalyticsStadium(null)}/>}
       {bookingsStadium&&(
         <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&setBookingsStadium(null)}>
           <div className="modal wide-modal">
@@ -767,7 +903,7 @@ function BrowseStadiumsPage({ onMessageOwner }) {
       </div>
 
       {loading && <div className="center-spinner" style={{ padding: 40 }}><span className="spinner large"/></div>}
-      {!loading && stadiums.length === 0 && <div className="empty-state"><div className="empty-icon"><IconStadium/></div><p>{hasFilters ? 'No stadiums match your filters' : 'No stadiums available yet'}</p></div>}
+      {!loading && stadiums.length === 0 && <div className="empty-state"><div className="empty-icon"><IconStadium/></div><p>{hasFilters ? 'No stadiums match your filters' : 'No active stadiums yet — owners must set their stadium to Active'}</p></div>}
       <div className="stadium-grid">
         {stadiums.map(s => {
           const color = SURFACE_COLOR[s.surface] || '#4ade80';

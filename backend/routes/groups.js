@@ -177,6 +177,18 @@ router.put('/:id', authenticate, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const check = await pool.query(
+      `SELECT id FROM group_members WHERE group_id=$1 AND user_id=$2 AND role='admin' AND status='active'`,
+      [req.params.id, req.user.id]
+    );
+    if (!check.rows.length) return res.status(403).json({ error: 'Only the group admin can delete this group' });
+    await pool.query('DELETE FROM groups WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
 router.delete('/:id/leave', authenticate, async (req, res) => {
   try {
     await pool.query(

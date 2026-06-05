@@ -248,7 +248,7 @@ function CreateGroupModal({ onClose, onCreated }) {
                   className={`friend-picker-item ${selectedFriends.has(f.id) ? 'selected' : ''}`}
                   onClick={() => toggleFriend(f.id)}
                 >
-                  <Avatar name={f.name} size={38} />
+                  <Avatar name={f.name} src={f.avatar_url} size={38} />
                   <div className="player-info">
                     <span className="player-name">{f.name}</span>
                     {[f.city,f.country].filter(Boolean).join(', ') && <span className="player-meta"><IconMapPin /> {[f.city,f.country].filter(Boolean).join(', ')}</span>}
@@ -415,6 +415,11 @@ function GroupDetail({ group, user, onBack }) {
     try { await apiCall(`/groups/${group.id}/leave`, 'DELETE'); onBack(); } catch {}
   };
 
+  const deleteGroup = async () => {
+    if (!window.confirm(`Delete "${currentGroup.name}"? This cannot be undone.`)) return;
+    try { await apiCall(`/groups/${group.id}`, 'DELETE'); onBack(); } catch (e) { alert(e?.message || 'Failed'); }
+  };
+
   const formatTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const isAdmin = detail?.members?.find(m => m.id === user.id)?.role === 'admin';
   const memberIds = new Set(detail?.members?.map(m => m.id) || []);
@@ -438,11 +443,16 @@ function GroupDetail({ group, user, onBack }) {
           <span className="group-meta">{detail?.members?.length || 0} members</span>
         </div>
         {isAdmin && (
-          <button className="action-btn primary" style={{ fontSize: 12 }} onClick={() => setShowEdit(true)}>
-            <IconEdit /> Edit
-          </button>
+          <>
+            <button className="action-btn primary" style={{ fontSize: 12 }} onClick={() => setShowEdit(true)}>
+              <IconEdit /> Edit
+            </button>
+            <button className="action-btn danger" style={{ fontSize: 12 }} onClick={deleteGroup}>
+              <IconTrash />
+            </button>
+          </>
         )}
-        <button className="action-btn danger" style={{ fontSize: 12 }} onClick={leaveGroup}>Leave</button>
+        {!isAdmin && <button className="action-btn danger" style={{ fontSize: 12 }} onClick={leaveGroup}>Leave</button>}
       </div>
 
       {(currentGroup.stadium_name || currentGroup.match_day !== null) && (

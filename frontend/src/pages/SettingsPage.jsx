@@ -9,6 +9,21 @@ function SettingsPage({ user, onAvatarChange, onLogout, isOwner }) {
   const [bio, setBio] = useState(user.bio || '');
   const [bioSaving, setBioSaving] = useState(false);
   const [bioSaved, setBioSaved] = useState(false);
+  const [name, setName] = useState(user.name || '');
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameSaved, setNameSaved] = useState(false);
+
+  const saveName = async () => {
+    if (!name.trim() || name.trim() === user.name) return;
+    setNameSaving(true);
+    try {
+      await apiCall('/auth/name', 'PATCH', { name });
+      onAvatarChange({ name: name.trim() });
+      setNameSaved(true);
+      setTimeout(() => setNameSaved(false), 2500);
+    } catch (err) { alert('Failed: ' + err.message); }
+    setNameSaving(false);
+  };
 
   const saveBio = async () => {
     setBioSaving(true);
@@ -235,7 +250,19 @@ function SettingsPage({ user, onAvatarChange, onLogout, isOwner }) {
               <div className="settings-info-card">
                 <div className="settings-info-row">
                   <span className="settings-info-label">Full Name</span>
-                  <span className="settings-info-value">{user.name}</span>
+                  <div style={{display:'flex',alignItems:'center',gap:8,flex:1,justifyContent:'flex-end'}}>
+                    <input
+                      value={name}
+                      onChange={e => setName(e.target.value.slice(0,100))}
+                      style={{textAlign:'right',background:'transparent',border:'none',borderBottom:'1px solid var(--border)',borderRadius:0,padding:'2px 4px',color:'var(--text)',fontSize:14,width:180,outline:'none'}}
+                      onFocus={e=>e.target.style.borderBottomColor='var(--primary)'}
+                      onBlur={e=>e.target.style.borderBottomColor='var(--border)'}
+                    />
+                    <button className="action-btn success" style={{padding:'4px 12px',fontSize:12,flexShrink:0}}
+                      onClick={saveName} disabled={nameSaving||!name.trim()||name.trim()===user.name}>
+                      {nameSaving?<span className="spinner sm"/>:nameSaved?'✓':'Save'}
+                    </button>
+                  </div>
                 </div>
                 <div className="settings-info-row">
                   <span className="settings-info-label">Email</span>

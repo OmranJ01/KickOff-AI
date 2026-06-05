@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiCall, DAYS, DAYS_SHORT, SURFACES, SURFACE_COLOR, STATUS_COLOR, STATUS_BG, toMin, fromMin, hoursInRange, computeFreeWindows, validEndTimes, validStartTimes, IconBall, IconStadium, IconLogout, IconSettings, IconEye, IconUsers, IconHome, IconSearch, IconCheck, IconX, IconUserPlus, IconUserMinus, IconMapPin, IconClock, IconPlus, IconEdit, IconTrash, IconCalendar, IconPhone, IconDollar, IconUsers2, IconToggle, IconFilter, IconBell, IconChat, IconGroup, IconSend, IconArrowLeft, IconShield, IconBookmark, IconArrow, Avatar, ImagePicker, PhotoZoomModal } from "../utils";
+import socket from "../socket";
 
 
 function ReviewModal({ booking, onClose }) {
@@ -87,6 +88,16 @@ function MyBookingsPage() {
 
   useEffect(()=>{load();},[]);
 
+  useEffect(() => {
+    const onNotif = (data) => {
+      if (['booking_confirmed','booking_cancelled','booking_cancelled_by_owner'].includes(data?.type)) {
+        load();
+      }
+    };
+    socket.on('notification', onNotif);
+    return () => socket.off('notification', onNotif);
+  }, []);
+
   const cancel = async(id)=>{
     if(!window.confirm("Cancel this booking?")) return;
     setCancelLoading(id);
@@ -124,7 +135,7 @@ function MyBookingsPage() {
             <div className="booking-slot-info">
               <span className="booking-day">
                 {b.booking_date
-                  ? new Date(b.booking_date + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' })
+                  ? new Date(String(b.booking_date).slice(0,10) + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' })
                   : DAYS[b.day_of_week]}
               </span>
               <span className="booking-time">{b.booked_start?.slice(0,5)} – {b.booked_end?.slice(0,5)}</span>
