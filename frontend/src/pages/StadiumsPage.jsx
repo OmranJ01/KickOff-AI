@@ -962,7 +962,7 @@ function BrowseStadiumsPage({ onMessageOwner }) {
   const [filters, setFilters] = useState({ q: '', city: '', country: '', day: '', slot: '' });
   const [bookingStadium, setBookingStadium] = useState(null);
   const [reviewsStadium, setReviewsStadium] = useState(null);
-  const [view, setView] = useState('list');
+  const [view, setView] = useState('map');
   const debounceRef = useRef(null);
 
   const TIME_OPTIONS = [];
