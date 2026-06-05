@@ -1819,3 +1819,85 @@ body {
   background: none; border: none; cursor: pointer;
   text-decoration: underline; padding: 0;
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   OWNER ANALYTICS MODAL
+══════════════════════════════════════════════════════════════════ */
+.analytics-modal { max-width: 520px; }
+.analytics-body {
+  padding: 0 24px 24px;
+  display: flex; flex-direction: column; gap: 20px;
+  max-height: 70vh; overflow-y: auto;
+}
+.analytics-stats-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.analytics-stat-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px;
+}
+.analytics-stat-card.green {
+  border-color: rgba(74,222,128,0.25);
+  background: rgba(74,222,128,0.05);
+}
+.analytics-stat-card.yellow {
+  border-color: rgba(250,204,21,0.25);
+  background: rgba(250,204,21,0.05);
+}
+.analytics-stat-value {
+  font-size: 22px; font-weight: 800;
+  color: var(--text); font-family: 'Syne', sans-serif;
+  line-height: 1;
+}
+.analytics-stat-card.green .analytics-stat-value { color: var(--primary); }
+.analytics-stat-card.yellow .analytics-stat-value { color: #facc15; }
+.analytics-stat-label {
+  font-size: 11px; color: var(--text-muted); margin-top: 4px;
+}
+.analytics-section-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px;
+}
+/* Column bar chart — bookings by day */
+.analytics-dow-chart {
+  display: flex; gap: 6px; align-items: flex-end; height: 90px;
+}
+.analytics-dow-col {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.analytics-dow-bar-wrap {
+  flex: 1; width: 100%; display: flex; align-items: flex-end;
+}
+.analytics-dow-bar {
+  width: 100%; background: var(--primary);
+  border-radius: 4px 4px 0 0; min-height: 0;
+  opacity: 0.8; transition: height 0.45s cubic-bezier(0.34,1.56,0.64,1);
+}
+.analytics-dow-count { font-size: 10px; color: var(--text-muted); min-height: 13px; }
+.analytics-dow-label { font-size: 10px; font-weight: 700; color: var(--text-muted); }
+/* Horizontal hour bars */
+.analytics-hours-list { display: flex; flex-direction: column; gap: 7px; }
+.analytics-hour-row { display: flex; align-items: center; gap: 8px; }
+.analytics-hour-label {
+  font-size: 12px; color: var(--text-muted); width: 38px; flex-shrink: 0;
+}
+.analytics-bar-track {
+  flex: 1; height: 8px;
+  background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden;
+}
+.analytics-bar-fill {
+  height: 100%; background: var(--primary); border-radius: 99px;
+  transition: width 0.45s cubic-bezier(0.34,1.56,0.64,1);
+}
+.analytics-bar-val {
+  font-size: 11px; color: var(--text-muted); width: 20px; text-align: right; flex-shrink: 0;
+}
+/* Last 30 days sparkline */
+.analytics-sparkline {
+  display: flex; gap: 2px; align-items: flex-end; height: 50px;
+}
+.analytics-spark-bar {
+  flex: 1; background: var(--primary); border-radius: 2px 2px 0 0;
+  min-height: 2px; transition: height 0.3s ease;
+}

@@ -403,4 +403,73 @@ router.get('/:id/month-availability', authenticate, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });
 
+// ══════════════════════════════════════════════════════════════════
+//  OWNER ANALYTICS
+// ══════════════════════════════════════════════════════════════════
+router.get('/:id/analytics', authenticate, requireOwner, async (req, res) => {
+  try {
+    const check = await pool.query(
+      'SELECT price_per_hour FROM stadiums WHERE id=$1 AND owner_id=$2',
+      [req.params.id, req.user.id]
+    );
+    if (!check.rows.length) return res.status(404).json({ error: 'Stadium not found' });
+    const pricePerHour = Number(check.rows[0].price_per_hour);
+
+    const [summaryRes, dowRes, hoursRes, trendRes] = await Promise.all([
+      pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE status='confirmed'
+            AND booking_date >= DATE_TRUNC('month', CURRENT_DATE)) AS month_confirmed,
+          COUNT(*) FILTER (WHERE status='pending')                  AS pending_now,
+          COUNT(*) FILTER (WHERE status='cancelled'
+            AND booking_date >= DATE_TRUNC('month', CURRENT_DATE)) AS month_cancelled,
+          COALESCE(SUM(CASE WHEN status='confirmed'
+            AND booking_date >= DATE_TRUNC('month', CURRENT_DATE) THEN
+            EXTRACT(EPOCH FROM (booked_end::time - booked_start::time))/3600 END), 0) AS month_hours,
+          COUNT(*) FILTER (WHERE status='confirmed') AS total_confirmed,
+          COALESCE(SUM(CASE WHEN status='confirmed' THEN
+            EXTRACT(EPOCH FROM (booked_end::time - booked_start::time))/3600 END), 0) AS total_hours
+        FROM bookings WHERE stadium_id=$1
+      `, [req.params.id]),
+
+      pool.query(`
+        SELECT day_of_week AS dow, COUNT(*)::int AS bookings
+        FROM bookings WHERE stadium_id=$1 AND status='confirmed'
+        GROUP BY day_of_week ORDER BY day_of_week
+      `, [req.params.id]),
+
+      pool.query(`
+        SELECT EXTRACT(HOUR FROM booked_start::time)::int AS hour, COUNT(*)::int AS count
+        FROM bookings WHERE stadium_id=$1 AND status='confirmed'
+        GROUP BY hour ORDER BY count DESC LIMIT 6
+      `, [req.params.id]),
+
+      pool.query(`
+        SELECT booking_date::text AS date,
+               COUNT(*) FILTER (WHERE status='confirmed')::int AS confirmed
+        FROM bookings
+        WHERE stadium_id=$1 AND booking_date >= CURRENT_DATE - 29
+        GROUP BY booking_date ORDER BY booking_date
+      `, [req.params.id])
+    ]);
+
+    const s = summaryRes.rows[0];
+    res.json({
+      thisMonth: {
+        confirmed:  parseInt(s.month_confirmed),
+        pending:    parseInt(s.pending_now),
+        cancelled:  parseInt(s.month_cancelled),
+        revenue:    Math.round(parseFloat(s.month_hours)  * pricePerHour)
+      },
+      allTime: {
+        confirmed: parseInt(s.total_confirmed),
+        revenue:   Math.round(parseFloat(s.total_hours) * pricePerHour)
+      },
+      byDow:        dowRes.rows,
+      popularHours: hoursRes.rows,
+      last30Days:   trendRes.rows
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+});
+
 module.exports = router;
