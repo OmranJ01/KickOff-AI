@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { apiCall, DAYS, DAYS_SHORT, SURFACES, SURFACE_COLOR, STATUS_COLOR, STATUS_BG, toMin, fromMin, hoursInRange, computeFreeWindows, validEndTimes, validStartTimes, IconBall, IconStadium, IconLogout, IconSettings, IconEye, IconUsers, IconHome, IconSearch, IconCheck, IconX, IconUserPlus, IconUserMinus, IconMapPin, IconClock, IconPlus, IconEdit, IconTrash, IconCalendar, IconPhone, IconDollar, IconUsers2, IconToggle, IconFilter, IconBell, IconChat, IconGroup, IconSend, IconArrowLeft, IconShield, IconBookmark, IconArrow, Avatar, ImagePicker, PhotoZoomModal } from "../utils";
 
 // ── Schedule Builder ──────────────────────────────────────────────
@@ -837,6 +839,121 @@ function OwnerStadiumsPage({ initialBookingStadiumId }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  STADIUM MAP VIEW
+// ══════════════════════════════════════════════════════════════════
+function StadiumMapView({ stadiums, onBook, onMessage, onReview }) {
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef  = useRef(null);
+  const markersRef      = useRef([]);
+  const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    if (!mapContainerRef.current || mapInstanceRef.current) return;
+
+    const map = L.map(mapContainerRef.current, {
+      center: [31.5, 35.0],
+      zoom: 7,
+      zoomControl: true,
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '© OpenStreetMap © CARTO',
+      subdomains: 'abcd',
+      maxZoom: 19,
+    }).addTo(map);
+
+    mapInstanceRef.current = map;
+    return () => { map.remove(); mapInstanceRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current = [];
+
+    const mapped = stadiums.filter(s => s.latitude && s.longitude);
+    mapped.forEach(s => {
+      const color = SURFACE_COLOR[s.surface] || '#4ade80';
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="map-pin" style="border-color:${color}">
+                 <span class="map-pin-label">${s.name.charAt(0).toUpperCase()}</span>
+               </div>`,
+        iconSize: [36, 44],
+        iconAnchor: [18, 44],
+      });
+      const marker = L.marker([parseFloat(s.latitude), parseFloat(s.longitude)], { icon })
+        .addTo(map)
+        .on('click', () => setSelected(s));
+      markersRef.current.push(marker);
+    });
+
+    if (mapped.length > 0) {
+      const bounds = L.latLngBounds(mapped.map(s => [parseFloat(s.latitude), parseFloat(s.longitude)]));
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+    }
+  }, [stadiums]);
+
+  const noCoords = stadiums.filter(s => !s.latitude || !s.longitude);
+  const color = selected ? (SURFACE_COLOR[selected.surface] || '#4ade80') : '#4ade80';
+
+  return (
+    <div className="map-wrapper">
+      <div ref={mapContainerRef} className="map-container" />
+
+      {/* Selected stadium panel */}
+      {selected && (
+        <div className="map-panel">
+          <button className="map-panel-close" onClick={() => setSelected(null)}>×</button>
+          {selected.image_url && (
+            <div style={{ height: 140, overflow: 'hidden', borderRadius: '12px 12px 0 0', margin: '-18px -18px 14px' }}>
+              <img src={selected.image_url} alt={selected.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)', marginBottom: 3 }}>{selected.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <IconMapPin /> {[selected.city, selected.country].filter(Boolean).join(', ')}
+              </div>
+            </div>
+            <span className="surface-tag" style={{ color, borderColor: `${color}40`, background: `${color}10`, fontSize: 11, flexShrink: 0 }}>{SURFACES[selected.surface]}</span>
+          </div>
+          {selected.description && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>{selected.description}</p>}
+          <div style={{ display: 'flex', gap: 14, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}><IconDollar /><span style={{ color, fontWeight: 700 }}>₪{Number(selected.price_per_hour).toLocaleString()}/hr</span></div>
+            {selected.capacity && <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}><IconUsers2 /><span>{selected.capacity} players</span></div>}
+            <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}><IconClock /><span>{selected.open_time?.slice(0,5)} – {selected.close_time?.slice(0,5)}</span></div>
+          </div>
+          {(selected.avg_rating || selected.review_count > 0) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+              {[1,2,3,4,5].map(i => <span key={i} style={{ fontSize: 14, color: i <= Math.round(selected.avg_rating) ? '#facc15' : '#374151' }}>★</span>)}
+              <span style={{ fontSize: 12, color: '#facc15', fontWeight: 600 }}>{selected.avg_rating}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({selected.review_count})</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="book-btn" style={{ flex: 1 }} onClick={() => { onBook(selected); setSelected(null); }}><IconCalendar /> Book</button>
+            <button className="book-btn" style={{ background: 'rgba(74,222,128,0.08)', color: 'var(--primary)', border: '1px solid rgba(74,222,128,0.25)' }}
+              onClick={() => { onMessage(selected); setSelected(null); }}><IconChat /></button>
+            <button className="book-btn" style={{ background: 'rgba(250,204,21,0.08)', color: '#facc15', border: '1px solid rgba(250,204,21,0.25)', padding: '0 14px' }}
+              onClick={() => { onReview(selected); setSelected(null); }}>★</button>
+          </div>
+        </div>
+      )}
+
+      {noCoords.length > 0 && (
+        <div className="map-no-coords">
+          {noCoords.length} stadium{noCoords.length > 1 ? 's' : ''} not yet on the map — owner must save the stadium to geocode it
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  PLAYER: BROWSE STADIUMS
 // ══════════════════════════════════════════════════════════════════
 function BrowseStadiumsPage({ onMessageOwner }) {
@@ -845,6 +962,7 @@ function BrowseStadiumsPage({ onMessageOwner }) {
   const [filters, setFilters] = useState({ q: '', city: '', country: '', day: '', slot: '' });
   const [bookingStadium, setBookingStadium] = useState(null);
   const [reviewsStadium, setReviewsStadium] = useState(null);
+  const [view, setView] = useState('list');
   const debounceRef = useRef(null);
 
   const TIME_OPTIONS = [];
@@ -879,6 +997,10 @@ function BrowseStadiumsPage({ onMessageOwner }) {
     <div className="stadiums-page">
       <div className="stadiums-header">
         <div><h2 className="page-title">Stadiums</h2><p className="page-sub">Browse and book available stadiums</p></div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className={`sub-tab ${view==='list'?'active':''}`} onClick={() => setView('list')} style={{ fontSize: 13, padding: '7px 16px' }}>☰ List</button>
+          <button className={`sub-tab ${view==='map'?'active':''}`} onClick={() => setView('map')} style={{ fontSize: 13, padding: '7px 16px' }}>🗺 Map</button>
+        </div>
       </div>
 
       {/* 4-field filter bar */}
@@ -904,7 +1026,17 @@ function BrowseStadiumsPage({ onMessageOwner }) {
 
       {loading && <div className="center-spinner" style={{ padding: 40 }}><span className="spinner large"/></div>}
       {!loading && stadiums.length === 0 && <div className="empty-state"><div className="empty-icon"><IconStadium/></div><p>{hasFilters ? 'No stadiums match your filters' : 'No active stadiums yet — owners must set their stadium to Active'}</p></div>}
-      <div className="stadium-grid">
+
+      {!loading && view === 'map' && stadiums.length > 0 && (
+        <StadiumMapView
+          stadiums={stadiums}
+          onBook={setBookingStadium}
+          onMessage={s => onMessageOwner && onMessageOwner({ partner_id: s.owner_id, partner_name: s.owner_name, partner_avatar: s.owner_avatar || null, partner_role: 'Stadium Owner' })}
+          onReview={setReviewsStadium}
+        />
+      )}
+
+      {(view === 'list' || stadiums.length === 0) && <div className="stadium-grid">
         {stadiums.map(s => {
           const color = SURFACE_COLOR[s.surface] || '#4ade80';
           return (
@@ -957,7 +1089,7 @@ function BrowseStadiumsPage({ onMessageOwner }) {
             </div>
           );
         })}
-      </div>
+      </div>}
       {bookingStadium&&<BookSlotModal stadium={bookingStadium} onClose={()=>setBookingStadium(null)} onBooked={()=>setBookingStadium(null)}/>}
       {reviewsStadium&&<ReviewsModal stadium={reviewsStadium} onClose={()=>{setReviewsStadium(null);load(filters);}}/>}
     </div>

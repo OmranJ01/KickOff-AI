@@ -5,6 +5,19 @@ const { authenticate, requireOwner } = require("../middleware");
 
 
 
+// Auto-geocode city+country using Nominatim (non-blocking)
+async function geocodeCity(city, country) {
+  const q = [city, country].filter(Boolean).join(', ');
+  if (!q) return null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'KickOffAI/1.0' } });
+    const data = await res.json();
+    if (data.length) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  } catch {}
+  return null;
+}
+
 router.get('/mine', authenticate, requireOwner, async (req, res) => {
 
   try {
@@ -31,6 +44,10 @@ router.post('/', authenticate, requireOwner, async (req, res) => {
       [req.user.id, name, city, country || null, description || null, price_per_hour, capacity || null,
        surface || 'grass', phone || null, open_time || '08:00', close_time || '22:00', image_url || null]
     );
+    const newId = r.rows[0].id;
+    geocodeCity(city, country).then(coords => {
+      if (coords) pool.query('UPDATE stadiums SET latitude=$1,longitude=$2 WHERE id=$3', [coords.lat, coords.lng, newId]);
+    }).catch(() => {});
     res.status(201).json(r.rows[0]);
   }
    catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
@@ -51,6 +68,9 @@ router.put('/:id', authenticate, requireOwner, async (req, res) => {
        phone || null, open_time || '08:00', close_time || '22:00',
        is_active !== undefined ? is_active : true, image_url || null, req.params.id, req.user.id]
     );
+    geocodeCity(city, country).then(coords => {
+      if (coords) pool.query('UPDATE stadiums SET latitude=$1,longitude=$2 WHERE id=$3', [coords.lat, coords.lng, req.params.id]);
+    }).catch(() => {});
     res.json(r.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 });

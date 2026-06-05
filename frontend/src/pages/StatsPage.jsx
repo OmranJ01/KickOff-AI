@@ -206,61 +206,73 @@ function AIAnalystCard({ playerId }) {
   );
 }
 
-/* ── Match card ───────────────────────────────────────────── */
-function MatchCard({ m }) {
+/* ── Timeline match entry ─────────────────────────────────── */
+function TimelineMatch({ m, isLast }) {
   const scoreA = Number(m.score_a), scoreB = Number(m.score_b);
   const result = scoreA > scoreB ? 'W' : scoreA < scoreB ? 'L' : 'D';
   const rc = result === 'W' ? '#4ade80' : result === 'L' ? '#f87171' : '#facc15';
+  const dateStr = new Date(m.played_on).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
   return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16,
-      padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12,
-      transition: 'border-color 0.15s',
-    }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(74,222,128,0.3)'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-        <div style={{ width: 36, height: 36, borderRadius: 9, flexShrink: 0, background: `${rc}18`, border: `1px solid ${rc}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, color: rc }}>{result}</div>
-        <div style={{ flex: 1, minWidth: 130 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{m.group_name}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}><IconCalendar /> {new Date(m.played_on).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-            <span style={{ fontWeight: 800, fontSize: 13, color: rc, background: `${rc}18`, border: `1px solid ${rc}33`, borderRadius: 7, padding: '2px 9px' }}>{scoreA} – {scoreB}</span>
-            {m.notes && <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>"{m.notes}"</span>}
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-          {m.position && <div style={{ padding: '5px 11px', borderRadius: 7, background: 'rgba(192,132,252,0.1)', border: '1px solid rgba(192,132,252,0.25)', fontSize: 12, fontWeight: 600, color: '#c084fc' }}>{m.position}</div>}
-          <div style={{ display: 'flex', gap: 12, padding: '8px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2, textTransform: 'uppercase' }}>Goals</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#60a5fa', lineHeight: 1 }}>{m.goals}</div>
-            </div>
-            <div style={{ width: 1, background: 'var(--border)' }} />
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2, textTransform: 'uppercase' }}>Assists</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#fb923c', lineHeight: 1 }}>{m.assists}</div>
-            </div>
-          </div>
-        </div>
+    <div className="timeline-entry">
+      {/* Left — dot + line */}
+      <div className="timeline-left">
+        <div className="timeline-dot" style={{ background: rc, boxShadow: `0 0 10px ${rc}66` }} />
+        {!isLast && <div className="timeline-line" />}
       </div>
-      {(m.notes_good || m.notes_bad) && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {m.notes_good && (
-            <div style={{ display: 'flex', gap: 8, fontSize: 12, background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: 8, padding: '7px 12px' }}>
-              <span style={{ flexShrink: 0 }}>✅</span>
-              <span style={{ color: 'var(--text)', opacity: 0.85 }}>{m.notes_good}</span>
-            </div>
-          )}
-          {m.notes_bad && (
-            <div style={{ display: 'flex', gap: 8, fontSize: 12, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', borderRadius: 8, padding: '7px 12px' }}>
-              <span style={{ flexShrink: 0 }}>❌</span>
-              <span style={{ color: 'var(--text)', opacity: 0.85 }}>{m.notes_bad}</span>
-            </div>
-          )}
+
+      {/* Right — card */}
+      <div className="timeline-card">
+        {/* Header row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+          <div className="timeline-result-badge" style={{ background: `${rc}18`, border: `1px solid ${rc}44`, color: rc }}>{result}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{m.group_name}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{dateStr}</div>
+          </div>
+          <div className="timeline-score" style={{ color: rc }}>
+            {scoreA} <span style={{ opacity: 0.4, fontSize: 18 }}>–</span> {scoreB}
+          </div>
         </div>
-      )}
+
+        {/* Stats row */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: (m.notes_good || m.notes_bad || m.rating) ? 10 : 0 }}>
+          {m.position && <span className="timeline-chip" style={{ color: '#c084fc', borderColor: 'rgba(192,132,252,0.3)', background: 'rgba(192,132,252,0.08)' }}>📍 {m.position}</span>}
+          <span className="timeline-chip" style={{ color: '#60a5fa', borderColor: 'rgba(96,165,250,0.3)', background: 'rgba(96,165,250,0.08)' }}>⚽ {m.goals} goal{m.goals !== 1 ? 's' : ''}</span>
+          <span className="timeline-chip" style={{ color: '#fb923c', borderColor: 'rgba(251,146,60,0.3)', background: 'rgba(251,146,60,0.08)' }}>🎯 {m.assists} assist{m.assists !== 1 ? 's' : ''}</span>
+          {m.rating && <span className="timeline-chip" style={{ color: '#facc15', borderColor: 'rgba(250,204,21,0.3)', background: 'rgba(250,204,21,0.08)' }}>★ {m.rating}/10</span>}
+        </div>
+
+        {/* Rating bar */}
+        {m.rating && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{ width: `${(m.rating / 10) * 100}%`, height: '100%', background: `linear-gradient(90deg, ${rc}, ${rc}aa)`, borderRadius: 2, transition: 'width 0.6s ease' }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AI notes */}
+        {(m.notes_good || m.notes_bad) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {m.notes_good && (
+              <div style={{ display: 'flex', gap: 7, fontSize: 12, background: 'rgba(74,222,128,0.05)', border: '1px solid rgba(74,222,128,0.12)', borderLeft: '3px solid #4ade80', borderRadius: '0 8px 8px 0', padding: '6px 10px' }}>
+                <span style={{ flexShrink: 0 }}>✅</span><span style={{ color: 'var(--text)', opacity: 0.85, lineHeight: 1.4 }}>{m.notes_good}</span>
+              </div>
+            )}
+            {m.notes_bad && (
+              <div style={{ display: 'flex', gap: 7, fontSize: 12, background: 'rgba(248,113,113,0.05)', border: '1px solid rgba(248,113,113,0.12)', borderLeft: '3px solid #f87171', borderRadius: '0 8px 8px 0', padding: '6px 10px' }}>
+                <span style={{ flexShrink: 0 }}>🔧</span><span style={{ color: 'var(--text)', opacity: 0.85, lineHeight: 1.4 }}>{m.notes_bad}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {m.notes && !m.notes_good && !m.notes_bad && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 4 }}>"{m.notes}"</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -355,9 +367,9 @@ export default function StatsPage({ user }) {
             <StatCard label="Position"     value={summary?.top_position ?? '—'} icon={<IconStar />} color="#facc15" />
           </div>
 
-          {/* Match history */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <h3 className="section-title" style={{ margin: 0 }}>{isMe ? 'My Match History' : `${displayName}'s Match History`}</h3>
+          {/* Match Timeline */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <h3 className="section-title" style={{ margin: 0 }}>{isMe ? 'Match Timeline' : `${displayName}'s Matches`}</h3>
             {(recent || []).length > 0 && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{(recent || []).length} matches</span>}
           </div>
 
@@ -366,11 +378,46 @@ export default function StatsPage({ user }) {
               <div className="empty-icon"><IconCalendar /></div>
               <p>{isMe ? 'No matches logged yet — your group admin can add results.' : 'No matches logged yet.'}</p>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(recent || []).map((m, i) => <MatchCard key={i} m={m} />)}
-            </div>
-          )}
+          ) : (() => {
+            // Group by month
+            const byMonth = {};
+            (recent || []).forEach(m => {
+              const key = new Date(m.played_on).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+              if (!byMonth[key]) byMonth[key] = [];
+              byMonth[key].push(m);
+            });
+            // Current streak
+            let streak = 0, streakType = null;
+            for (const m of (recent || [])) {
+              const r = Number(m.score_a) > Number(m.score_b) ? 'W' : Number(m.score_a) < Number(m.score_b) ? 'L' : 'D';
+              if (streakType === null) { streakType = r; streak = 1; }
+              else if (r === streakType) streak++;
+              else break;
+            }
+            const streakEmoji = streakType === 'W' ? '🔥' : streakType === 'L' ? '❄️' : '➖';
+            const streakColor = streakType === 'W' ? '#4ade80' : streakType === 'L' ? '#f87171' : '#facc15';
+            const streakLabel = streakType === 'W' ? 'win' : streakType === 'L' ? 'loss' : 'draw';
+            return (
+              <div>
+                {streak >= 2 && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: `${streakColor}10`, border: `1px solid ${streakColor}30`, borderRadius: 99, marginBottom: 24, fontSize: 13, fontWeight: 600, color: streakColor }}>
+                    <span style={{ fontSize: 18 }}>{streakEmoji}</span>
+                    {streak} game {streakLabel} streak
+                  </div>
+                )}
+                {Object.entries(byMonth).map(([month, matches]) => (
+                  <div key={month}>
+                    <div className="timeline-month-label">{month}</div>
+                    {matches.map((m, i) => {
+                      const allMatches = Object.values(byMonth).flat();
+                      const globalIdx = allMatches.indexOf(m);
+                      return <TimelineMatch key={i} m={m} isLast={globalIdx === allMatches.length - 1} />;
+                    })}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </>
       )}
 
