@@ -274,7 +274,6 @@ function PlayersPage({ user }) {
     if (f.city) params.set('city', f.city);
     if (f.country) params.set('country', f.country);
     if (f.day !== '') params.set('day', f.day);
-    if (!f.q && !f.city && !f.country && f.day === '') { setSearchResults([]); setHasSearched(false); return; }
     setSearching(true); setHasSearched(true);
     try { setSearchResults(await apiCall(`/players/search?${params}`)); } catch {}
     setSearching(false);

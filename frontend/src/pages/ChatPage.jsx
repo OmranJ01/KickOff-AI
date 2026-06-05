@@ -91,7 +91,7 @@ function ChatWindow({ user, partner, onBack }) {
         await apiCall(`/messages/block/${partner.partner_id}`, 'DELETE');
         setBlockStatus(s => ({ ...s, iBlockedThem: false }));
       } else {
-        if (!window.confirm(`Block ${partner.partner_name}? They won't be able to message you.`)) { setBlockLoading(false); return; }
+        if (!window.confirm(`Block ${cleanName(partner.partner_name)}? They won't be able to message you.`)) { setBlockLoading(false); return; }
         await apiCall(`/messages/block/${partner.partner_id}`, 'POST');
         setBlockStatus(s => ({ ...s, iBlockedThem: true }));
       }
@@ -119,10 +119,10 @@ function ChatWindow({ user, partner, onBack }) {
         <button className="back-btn" onClick={onBack}><IconArrowLeft /></button>
         <div style={{cursor: blockStatus.theyBlockedMe ? 'default' : 'pointer'}}
           onClick={() => !blockStatus.theyBlockedMe && setZoomPhoto({ name: partner.partner_name, src: partner.partner_avatar })}>
-          <Avatar name={blockStatus.theyBlockedMe ? 'App User' : partner.partner_name} src={blockStatus.theyBlockedMe ? null : partner.partner_avatar} size={40}/>
+          <Avatar name={blockStatus.theyBlockedMe ? 'App User' : cleanName(partner.partner_name)} src={blockStatus.theyBlockedMe ? null : partner.partner_avatar} size={40}/>
         </div>
         <div style={{flex:1}}>
-          <span className="chat-partner-name">{blockStatus.theyBlockedMe ? 'App User' : partner.partner_name}</span>
+          <span className="chat-partner-name">{blockStatus.theyBlockedMe ? 'App User' : cleanName(partner.partner_name)}</span>
           {!blockStatus.theyBlockedMe && [partner.partner_city, partner.partner_country].filter(Boolean).join(', ') && <span className="chat-partner-loc"><IconMapPin /> {[partner.partner_city, partner.partner_country].filter(Boolean).join(', ')}</span>}
           {partner.partner_role && !blockStatus.theyBlockedMe && <span className="chat-partner-loc" style={{color:'#f59e0b'}}>⚽ {partner.partner_role}</span>}
         </div>
@@ -211,6 +211,8 @@ function ChatWindow({ user, partner, onBack }) {
 }
 
 
+const cleanName = n => n?.includes('@') ? n.split('@')[0] : n;
+
 function ChatPage({ user, initialPartner }) {
   const [contacts, setContacts] = useState([]); // friends + owners from conversations
   const [loading, setLoading] = useState(true);
@@ -297,10 +299,10 @@ function ChatPage({ user, initialPartner }) {
             <div key={c.partner_id}
               className={`conv-item ${activeConv?.partner_id === c.partner_id ? 'active' : ''}`}
               onClick={() => setActiveConv(c)}>
-              <Avatar name={c.partner_name} src={c.partner_avatar} size={42} />
+              <Avatar name={cleanName(c.partner_name)} src={c.partner_avatar} size={42} />
               <div className="conv-info">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="conv-name">{c.partner_name}</span>
+                  <span className="conv-name">{cleanName(c.partner_name)}</span>
                   {c.partner_role && <span className="conv-role-tag">{c.partner_role}</span>}
                 </div>
                 <span className="conv-last">

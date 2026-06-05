@@ -1074,7 +1074,7 @@ function BrowseStadiumsPage({ onMessageOwner }) {
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>({s.review_count} review{s.review_count !== 1 ? 's' : ''})</span>
                 </div>
               )}
-              <div className="browse-owner"><Avatar name={s.owner_name} src={s.owner_avatar} size={22}/><span>by {s.owner_name}</span></div>
+              <div className="browse-owner"><Avatar name={s.owner_name?.includes('@')?s.owner_name.split('@')[0]:s.owner_name} src={s.owner_avatar} size={22}/><span>by {s.owner_name?.includes('@')?s.owner_name.split('@')[0]:s.owner_name}</span></div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="book-btn" style={{ flex: 1 }} onClick={() => setBookingStadium(s)}><IconCalendar/> Book a Slot</button>
                 <button className="book-btn" style={{ flex: 1, background: 'rgba(74,222,128,0.08)', color: 'var(--primary)', border: '1px solid rgba(74,222,128,0.25)' }}
